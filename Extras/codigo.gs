@@ -248,7 +248,7 @@ function respuestaJSON(objeto) {
 }
 
 function sendOrderAPI(newOrder){
-  const API = 'https://36ea0f707275.ngrok-free.app/api/pedidos/';
+  const API = 'https://b049a014a8dd.ngrok-free.app/api/pedidos/';
   const sucursal = newOrder.sucursal;
   const payload = JSON.stringify(newOrder);
   const options = {

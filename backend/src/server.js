@@ -9,6 +9,7 @@ const app = express();
 const server = http.createServer(app)
 const io = socketIo(server)
 const PORT = process.env.PORT || 3000;
+const db = require('./db'); //importa el modulo de acceso a datos
 
 // Rutas relativas al backend/src
 const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
@@ -27,7 +28,7 @@ app.use(session({
 }));
 
 // Servir archivos estáticos desde frontend/src
-app.use('/CSS', express.static(path.join(FRONTEND_SRC, 'CSS')));
+app.use('/CSS', express.static(path.join(FRONTEND_SRC, 'CSS')));           
 app.use('/JS', express.static(path.join(FRONTEND_SRC, 'JS')));
 app.use('/Audio', express.static(path.join(FRONTEND_SRC, 'Audio')));
 app.use('/Img', express.static(path.join(FRONTEND_SRC, 'Img')));
@@ -287,10 +288,24 @@ app.get('/api/corte', async (req, res) => {
   }
 });;
 
-app.get('/api/pedidos.json', (req, res) => {
+app.get('/api/pedidos.json', async (req, res) =>{
+  try {
+    //vamos a ejecutar una consulta SQL para obtener todos los pedidos ordenados por hora descendente
+    const result = await db.query('SELECT * FROM pedidos ORDER BY hora DESC');
+
+    const pedidos = result.rows; //'result.rows' contiene el array de pedidos (resultados)
+    res.json(pedidos);
+  } catch (error) {
+    //si hay error al consultar la base de datos, registrarlo y responder un error al cliente
+    console.error(`ERROR AL OBTENER PEDIDOS DE LA BASE DE DATOS --- ERROR: ${error}`);
+    res.status(500).send('Error interno del servidor al obtener pedidos')
+  }
+});
+
+/*app.get('/api/pedidos.json', async (req, res) => {
   const pedidos = cargarPedidos();
   res.json(pedidos);
-});
+});*/
 
 server.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
