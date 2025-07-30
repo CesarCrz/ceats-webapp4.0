@@ -26,6 +26,7 @@ const { Pool } = require('pg');
     async function query(text, params){
         //eliminar la parte del console.log siguiente cuando se mande a produccion por temas de seguridad, por ahora se queda para debug
         console.log(`QUERY A EJECUTAR: ${text} -- ${params}`)
+        console.log(`PASSWORD IS: ${process.env.DB_PASSWORD}`)
         return await pool.query(text, params)
     }
 
