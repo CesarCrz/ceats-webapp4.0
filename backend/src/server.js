@@ -10,6 +10,7 @@ const server = http.createServer(app)
 const io = socketIo(server)
 const PORT = process.env.PORT || 3000;
 const db = require('./db'); //importa el modulo de acceso a datos
+const { comparePassword } = require ('./utils/authUtils');
 
 // Rutas relativas al backend/src
 const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
@@ -22,9 +23,13 @@ const FRONTEND_SRC = path.join(FRONTEND_ROOT, 'src');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-  secret: 'soru-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie:{
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 1000 * 60 * 60 * 24 // 24 horas de duracion de sesion
+  }
 }));
 
 // Servir archivos estáticos desde frontend/src
@@ -46,6 +51,69 @@ app.get('/ticket', (req, res) => {
 app.get('/main/pedidos/:sucursal', (req, res) => {
   res.sendFile(path.join(FRONTEND_SRC, 'pages', 'main.html'));
 });
+
+// --  Endpoint para el inicio de sesión
+
+app.post('/api/login', async (req, res) => {
+    const {email, password} = req.body; //obtenemos las variables del body de la peticion
+
+    if (!email || !password){
+      return res.status(400).json({success: false, error: `Se requiere email y contraseña`});
+    }
+
+    try {
+      //vamos a buscar al usuario en la base de datos por el email
+
+      const queryText = 'SELECT * FROM usuarios WHERE email = $1';
+      const values = [email];
+      const result = await db.query(queryText, values);
+
+      if (result.rowCount === 0){
+        console.log(`Email: ${email} no encontrado`);
+        return res.status(401).json({success: false, error: 'Email o contraseña incorrectos'});
+      }
+
+      const user = result.rows[0];
+
+      //vamos a comparar la contraseña ingresada con el hash almacenado
+
+      const passwordMatch = await comparePassword(password, user.password);
+
+      if (!passwordMatch){
+        console.log(`Contraseña incorrecta o correo incorrecto`);
+        return res.status(401).json({success: false, error: 'Email o contraseña incorrectos'});
+      }
+
+      // si la contraseña coincide, el usuario está autenticado
+      //vamos a almacenar la informacion relevante dle usuario en el objeto de sesión (req.session.user)
+
+      req.session.user = {
+        email: user.email,
+        role: user.role,
+        sucursal: user.sucursal //cuando un usuario sea admin va a ser null 
+      }
+
+      console.log(`Login exitoso para usuario ${user.email} - ${user.role}`);
+
+      //y por ultimo con todo lo anterior completado enviarmos la informacion al frontend
+
+      res.json({
+        success: true,
+        email: user.email,
+        role: user.role,
+        sucursal: user.sucursal
+      });
+
+    } catch (error) {
+      // si ocurre algun error vamos a capturarlo
+
+      console.error(`Error durante el proceso del login. -- ERROR: ${error}`);
+      res.status(500).json({succes: false, message: 'Error interno del servidor'});
+    }
+});
+
+
+
 
 /*function cargarPedidos() {
   if (!fs.existsSync(PEDIDOS_FILE)) return []
@@ -313,7 +381,7 @@ app.post('/api/pedidos/:sucursal', async (req, res) =>{
   }
 });*/
 
-app.get('api/pedidos/:codigo', async (req, res) => {
+app.get('/api/pedidos/:codigo', async (req, res) => {
     const codigo = req.params.codigo;
     if (!codigo){
       console.error('se requiere un codigo de pedido obligatoriamente');
@@ -323,9 +391,9 @@ app.get('api/pedidos/:codigo', async (req, res) => {
       // Consulta SQL para obtener un pedido por el codigo
       // Usamos placeholder $1 y pasamos [codiho] para evitar inyecciones SQL
 
-      const queryText = 'SELECT * FROM pedidos HWERE codigo = $1';
+      const queryText = 'SELECT * FROM pedidos WHERE codigo = $1';
       const values = [codigo];
-      const result = await eb.query(queryText, values);
+      const result = await db.query(queryText, values);
 
       //si la consulta encontro al menos una fila....
       if (result.rows.length > 0 ){
@@ -361,7 +429,7 @@ app.get('/api/obtenerPedidos', async (req, res) => {
   }
 });
 
-app.delete('/api/pedidos/:codigo', (req, res) => {
+/*app.delete('/api/pedidos/:codigo', (req, res) => {
   const codigo = req.params.codigo;
   let pedidos =cargarPedidos();
 
@@ -376,7 +444,40 @@ app.delete('/api/pedidos/:codigo', (req, res) => {
   io.emit('pedido_eliminado', eliminado);
 
   res.json({ success: true, pedido: eliminado });
-})
+})*/
+
+app.delete('/api/pedidos/:codigo', async (req, res) => {
+    //obtiene el valro del parametro :codigo de la URL
+    const codigoPedido = req.params.codigo;
+    
+    if (!codigoPedido) return res.status(400).json({success: false, error: 'Se requiere un pedido para eliminar'});
+    try {
+      //antes de permititr eliminar vamos a verificar si el usuario es administrador o autorizado para completar esta accion
+      //Ejemplo (Esto lo implementaremos mas adelante)
+      // if (!req.user || req.user.role !== 'admin') return res.status(403).json({success: false, error: 'No tienes autorizacion para completar esta acción'});}
+
+      //consulta SQL para eliminar un pedido específico
+      const queryText = 'DELETE FROM pedidos WHERE codigo = $1';
+      const values = [codigoPedido];
+
+      //EJECUTAMOS EL SQL CON SUS PARAMETROS
+      const result = await db.query(queryText, values);
+
+      if (result.rowCount > 0) {
+        // si se eliminó al menos una fila
+        console.log(`Pedido con codigo ${codigoPedido} elimiando con éxito de la BD`);
+        res.json({success: true, mensaje: `Pedido con codigo ${codigoPedido} eliminado con éxito`});
+      } else {
+        //Si rowCount es 0 ningu pedido con ese codigo fue elimiando
+        res.status(404).json({success: false, error: `Pedido con codigo ${codigoPedido} no encontrado para eliminar`});
+      }
+
+    } catch (error) {
+      console.error(`Error al eliminar el pedido ${codigoPedido} --- Error: ${error}`);
+      res.status(500).json({success: false, error: `Error interno del servidor`});
+    }
+
+});
 
 app.post('/api/cancelarPedido', async (req, res) => {
   const { codigoPedido, motivo } = req.body;
