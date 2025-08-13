@@ -9,8 +9,10 @@ const app = express();
 const server = http.createServer(app)
 const io = socketIo(server)
 const PORT = process.env.PORT || 3000;
+const jwt = require('jsonwebtoken'); 
 const db = require('./db'); //importa el modulo de acceso a datos
 const { comparePassword } = require ('./utils/authUtils');
+require('dotenv').config({path: __dirname + '/../../env'});
 
 // Rutas relativas al backend/src
 const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
@@ -77,7 +79,7 @@ app.post('/api/login', async (req, res) => {
 
       //vamos a comparar la contraseña ingresada con el hash almacenado
 
-      const passwordMatch = await comparePassword(password, user.password);
+      const passwordMatch = await comparePassword(password, user.password_hash);
 
       if (!passwordMatch){
         console.log(`Contraseña incorrecta o correo incorrecto`);
@@ -97,11 +99,26 @@ app.post('/api/login', async (req, res) => {
 
       //y por ultimo con todo lo anterior completado enviarmos la informacion al frontend
 
+      const JWT_SECRET = process.env.JWT_SECRET;
+
+      //generamos el token
+      const token = jwt.sign({
+        email: user.email,
+        role: user.role,
+        sucursal:user.sucursal
+      },
+      JWT_SECRET,
+      {expiresIn: '4h'}
+      );
+
+
+
       res.json({
         success: true,
         email: user.email,
         role: user.role,
-        sucursal: user.sucursal
+        sucursal: user.sucursal,
+        token: token
       });
 
     } catch (error) {
@@ -616,6 +633,17 @@ app.get('/api/pedidos.json', async (req, res) =>{
   const pedidos = cargarPedidos();
   res.json(pedidos);
 });*/
+
+// Middlware para verificar si el usuario está autenticado
+function isAuthenticated(req, res, next){
+  if (req.session && req.session.user){
+    //si hay usuario autenticado continaur a la siguiente funcion
+    next();
+  }else {
+  // si no hay u suario autenticado devolver un error
+  res.status(401).json({success: false, error: 'Sin autorización, por favor inicia sesión'});
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
