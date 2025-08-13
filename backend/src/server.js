@@ -97,8 +97,6 @@ app.post('/api/login', async (req, res) => {
 
       //y por ultimo con todo lo anterior completado enviarmos la informacion al frontend
 
-      const JWT_SECRET = process.env.JWT_SECRET;
-
       //generamos el token
       const token = jwt.sign({
         email: user.email,
@@ -142,13 +140,47 @@ function guardarPedidos(pedidos) {
 
 // -- Endpoint para obtener los pedidos filtrados por sucursal
 
-app.get('/api/pedidos/sucursal/:sucursal', async (req, res)=>{
+app.get('/api/pedidos/sucursal/:sucursal', verifyToken, async (req, res)=>{
     //obtenemos el valor del del parametro ':sucursal' de la URL
-    const sucursal = req.params.sucursal;
+    const sucursalSolicitada = req.params.sucursal; // Renombramos para mayor claridad
+
+    // **** Lógica de Autorización: Verificar acceso basado en rol y sucursal ****
+    const usuarioAutenticado = req.user; // Info del usuario del token
+
+    // 1. Si no hay usuario o no tiene rol/sucursal, denegar acceso (aunque verifyToken ya lo haría, es buena práctica)
+    if (!usuarioAutenticado || !usuarioAutenticado.role) {
+         return res.status(403).json({ success: false, message: 'Acceso denegado: Información de usuario incompleta en el token.' });
+    }
+
+    // 2. Permitir acceso total a administradores
+    if (usuarioAutenticado.role === 'admin') {
+        // Los administradores pueden acceder a cualquier sucursal.
+        // Continuar con la consulta usando la sucursal solicitada en la URL.
+        console.log(`Admin ${usuarioAutenticado.email} accediendo a pedidos de sucursal ${sucursalSolicitada}`);
+    } else if (usuarioAutenticado.role === 'empleado' || usuarioAutenticado.role === 'gerente') { // O cualquier otro rol no admin
+        // 3. Restringir a usuarios no admin a su sucursal asignada
+        if (!usuarioAutenticado.sucursal) {
+             return res.status(403).json({ success: false, message: 'Acceso denegado: Su usuario no tiene una sucursal asignada.' });
+        }
+
+        if (usuarioAutenticado.sucursal !== sucursalSolicitada) {
+            // Si el usuario intenta acceder a una sucursal que no es la suya
+            console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó acceder a pedidos de sucursal ${sucursalSolicitada} (Su sucursal es ${usuarioAutenticado.sucursal})`);
+            return res.status(403).json({ success: false, message: `Acceso denegado: Solo puede acceder a pedidos de sucursal ${usuarioAutenticado.sucursal}.` });
+        }
+        // Si es su propia sucursal, permitir acceso.
+         console.log(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) accediendo a pedidos de sucursal ${sucursalSolicitada}`);
+
+    } else {
+         // Si tiene otro rol no definido, denegar acceso por defecto
+        return res.status(403).json({ success: false, message: `Acceso denegado: Rol de usuario desconocido (${usuarioAutenticado.role}).` });
+    }
+    // **************************************************************************
+
 
     // paso de validacion para asegurarnos  que se proporciono el nombre de la sucursal
-    
-    if (!sucursal) return res.status(400).json({ success: false, error: `Se requiere especificar la sucursal para obtener los pedidos`});
+    // Esta validación es útil si el admin pudiera omitir la sucursal, pero con el parámetro obligatorio, ya está cubierta por express.
+    // if (!sucursalSolicitada) return res.status(400).json({ success: false, error: `Se requiere especificar la sucursal para obtener los pedidos`});
 
     try {
       // consulta SQL para obtener pedidos filtrador por Sucursal
@@ -157,7 +189,7 @@ app.get('/api/pedidos/sucursal/:sucursal', async (req, res)=>{
 
       const queryText = 'SELECT * FROM pedidos WHERE sucursal = $1 ORDER BY hora DESC';
       //usamos placeholder
-      const values = [sucursal];
+      const values = [sucursalSolicitada];
 
       const result = await db.query(queryText, values);
 
@@ -166,7 +198,7 @@ app.get('/api/pedidos/sucursal/:sucursal', async (req, res)=>{
       res.json(pedidosFiltrados)
 
     } catch (error) {
-      console.error(`Error al obtener los pedidos de la sucursal ${sucursal} de la BD -- ERROR: ${error}`);
+      console.error(`Error al obtener los pedidos de la sucursal ${sucursalSolicitada} de la BD -- ERROR: ${error}`);
       res.status(500).json({success: false, error: 'Error interno del servidor al obtener los pedidos por sucursal'});
     }    
 
@@ -195,10 +227,55 @@ app.get('/api/pedidos/sucursal/:sucursal', async (req, res)=>{
   res.json({ success: true, pedido: pedidos[idx] });
 });*/
 
-app.post('/api/pedidos/:codigo/estado', async (req, res) =>{
+app.post('/api/pedidos/:codigo/estado', verifyToken, async (req, res) =>{
     const codigoPedido = req.params.codigo; //obtiene el codigo de la URL
     const {estado: nuevoEstado} = req.body; //y obtiene el nuevo estado del pedido directo del body de la solicitud POST
     if (!nuevoEstado) return res.status(400).send('Se requiere el nuevo estado del pedido para poder actualizar');
+    
+    // **** Lógica de Autorización: Verificar permiso para actualizar estado ****
+    const usuarioAutenticado = req.user; // Info del usuario del token
+
+    // 1. Si no hay usuario o no tiene rol, denegar acceso
+    if (!usuarioAutenticado || !usuarioAutenticado.role) {
+         return res.status(403).json({ success: false, message: 'Acceso denegado: Información de usuario incompleta en el token.' });
+    }
+
+    // 2. Obtener la sucursal del pedido que se intenta actualizar
+    try {
+        const pedidoResult = await db.query('SELECT sucursal FROM pedidos WHERE codigo = $1', [codigoPedido]);
+
+        if (pedidoResult.rowCount === 0) {
+             // Si el pedido no existe, responde con 404 (no es un error de autorización per se, sino de recurso no encontrado)
+            return res.status(404).json({ success: false, error: `Pedido con código ${codigoPedido} no encontrado en la BD.` });
+        }
+
+        const sucursalDelPedido = pedidoResult.rows[0].sucursal;
+
+        // 3. Verificar permisos basados en rol y sucursal
+        if (usuarioAutenticado.role !== 'admin') {
+            // Si el usuario NO es administrador, debe ser un usuario con sucursal asignada y debe coincidir con la sucursal del pedido
+            if (!usuarioAutenticado.sucursal) {
+                return res.status(403).json({ success: false, message: 'Acceso denegado: Su usuario no tiene una sucursal asignada.' });
+            }
+
+            if (usuarioAutenticado.sucursal !== sucursalDelPedido) {
+                // Si el usuario intenta actualizar un pedido de otra sucursal
+                 console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó actualizar estado de pedido ${codigoPedido} (sucursal ${sucursalDelPedido}) desde sucursal ${usuarioAutenticado.sucursal}`);
+                 return res.status(403).json({ success: false, message: `Acceso denegado: No tiene permiso para actualizar pedidos de sucursal ${sucursalDelPedido}.` });
+            }
+             // Si es su propia sucursal, permitir continuar (después de esta comprobación)
+             console.log(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) actualizando estado de pedido ${codigoPedido} de sucursal ${sucursalDelPedido}`);
+
+        } else {
+            // Si es administrador, permitir actualizar cualquier pedido
+             console.log(`Admin ${usuarioAutenticado.email} actualizando estado de pedido ${codigoPedido} de sucursal ${sucursalDelPedido}`);
+        }
+
+    } catch (error) {
+        console.error(`Error al obtener la sucursal del pedido ${codigoPedido} para autorización: --- ERROR: ${error}`);
+        return res.status(500).json({ success: false, error: 'Error interno del servidor durante la autorización.' });
+    }
+    
     try {
       //Vamos a hacer una consulta SQL para actualizar el estado de un pedido especifico a traves de su código
       const queryText = `
@@ -285,7 +362,7 @@ app.post('/api/pedidos/:codigo/estado', async (req, res) =>{
 
 // --- FALTA COMPROBAR DEL ENVIO DESDE EL SERVIDOR DE WHATSAPP QUE SEA ACORDE A COMO SE RECIBEN AQUI LOS PARAMETROS EN pedidoParaDB
 // -- Endpoint para meter nuevos pedidos 
-app.post('/api/pedidos/:sucursal', async (req, res) =>{
+app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
     const { sucursal } = req.params; //Obtenemos la sucursal de la URL
     const datosEntrada = req.body; //Obtenemos los datos entrantes
 
@@ -311,7 +388,7 @@ app.post('/api/pedidos/:sucursal', async (req, res) =>{
       // Generemos fecha y hora a partir de la hora mexicana 'America/Mexico_City'
       fecha: new Date().toLocaleDateString('es-MX', {timeZone: 'America/Mexico_City'}).split('/').reverse().join('-'),
       hora: new Date().toLocaleTimeString('es-MX', {timeZone: 'America/Mexico_City', hour12: false}), //se guarda en formato 24 horas (PREGUNTAR A DANI SI HAY PROBLEMA CON ESTO)
-      tiempo: tiempo ? tiempo: '' 
+      tiempo: datosEntrada.tiempo ? datosEntrada.tiempo: '' 
     };
 
     if (typeof pedidoParaDB.pedido !== 'string'){
@@ -319,10 +396,10 @@ app.post('/api/pedidos/:sucursal', async (req, res) =>{
       return res.status(400).json({success: false, error: `El formato de 'productDetails' debe ser un string`});
     }
 
-    if (!pedidoParaDB.codigo || !pedidoParaDB.deliverOrRest || !pedidoParaDB.estado || !pedidoParaDB.name || !pedidoParaDB.numero || !pedidoParaDB.sucursal || !pedidoParaDB.pedido || !pedidoParaDB.total || !pedidoParaDB.currency || !pedidoParaDB.pago || !pedidoParaDB.fecha || !pedidoParaDB.hora || pedidoParaDB.entregarA === undefined) { // Validar campos clave y que 'entregarA' este definido
+    if (!pedidoParaDB.codigo || !pedidoParaDB.deliver_or_rest || !pedidoParaDB.estado || !pedidoParaDB.nombre || !pedidoParaDB.celular || !pedidoParaDB.sucursal || !pedidoParaDB.pedido || !pedidoParaDB.total || !pedidoParaDB.currency || pedidoParaDB.pago === undefined || !pedidoParaDB.fecha || !pedidoParaDB.hora || pedidoParaDB.entregar_a === undefined) { // Validar campos clave
       console.error('Intento de crear pedido con datos faltantes (despues de mapeo):', pedidoParaDB);
-      console.error('Datos recibidos:', datosEntrada); 
-      return res.status(400).json({ success: false, error: 'Faltan datos requeridos para crear el pedido (codigo, deliverOrRest, estado, name, numero, sucursal, pedido, total, currency, pago, fecha, hora, entregarA son minimos).' });
+      console.error('Datos recibidos:', datosEntrada);
+      return res.status(400).json({ success: false, error: 'Faltan datos requeridos para crear el pedido (codigo, deliver_or_rest, estado, nombre, celular, sucursal, pedido, total, currency, pago, fecha, hora, entregar_a son minimos).' });
   }
   
     if (tipoPedido === 'domicilio' && !pedidoParaDB.domicilio) {
@@ -396,7 +473,7 @@ app.post('/api/pedidos/:sucursal', async (req, res) =>{
   }
 });*/
 
-app.get('/api/pedidos/:codigo', async (req, res) => {
+app.get('/api/pedidos/:codigo', verifyToken, async (req, res) => {
     const codigo = req.params.codigo;
     if (!codigo){
       console.error('se requiere un codigo de pedido obligatoriamente');
@@ -461,36 +538,43 @@ app.get('/api/obtenerPedidos', async (req, res) => {
   res.json({ success: true, pedido: eliminado });
 })*/
 
-app.delete('/api/pedidos/:codigo', async (req, res) => {
-    //obtiene el valro del parametro :codigo de la URL
-    const codigoPedido = req.params.codigo;
-    
-    if (!codigoPedido) return res.status(400).json({success: false, error: 'Se requiere un pedido para eliminar'});
-    try {
-      //antes de permititr eliminar vamos a verificar si el usuario es administrador o autorizado para completar esta accion
-      //Ejemplo (Esto lo implementaremos mas adelante)
-      // if (!req.user || req.user.role !== 'admin') return res.status(403).json({success: false, error: 'No tienes autorizacion para completar esta acción'});}
+app.delete('/api/pedidos/:codigo', verifyToken, async (req, res) => {
+  //obtiene el valro del parametro :codigo de la URL
+  const codigoPedido = req.params.codigo;
 
-      //consulta SQL para eliminar un pedido específico
-      const queryText = 'DELETE FROM pedidos WHERE codigo = $1';
-      const values = [codigoPedido];
+  //Lógica de Autorización: Solo permitir eliminar a roles autorizados
+  const usuarioAutenticado = req.user; // Info del usuario del token
 
-      //EJECUTAMOS EL SQL CON SUS PARAMETROS
-      const result = await db.query(queryText, values);
+  // Define qué roles tienen permiso para eliminar
+  const rolesAutorizadosParaEliminar = ['admin']; // Puedes ajustar esto
 
-      if (result.rowCount > 0) {
-        // si se eliminó al menos una fila
-        console.log(`Pedido con codigo ${codigoPedido} elimiando con éxito de la BD`);
-        res.json({success: true, mensaje: `Pedido con codigo ${codigoPedido} eliminado con éxito`});
-      } else {
-        //Si rowCount es 0 ningu pedido con ese codigo fue elimiando
-        res.status(404).json({success: false, error: `Pedido con codigo ${codigoPedido} no encontrado para eliminar`});
-      }
+  if (!usuarioAutenticado || !usuarioAutenticado.role || !rolesAutorizadosParaEliminar.includes(usuarioAutenticado.role)) {
+       return res.status(403).json({ success: false, message: 'Acceso denegado: No tiene permiso para eliminar pedidos.' });
+  }
 
-    } catch (error) {
-      console.error(`Error al eliminar el pedido ${codigoPedido} --- Error: ${error}`);
-      res.status(500).json({success: false, error: `Error interno del servidor`});
+  if (!codigoPedido) return res.status(400).json({success: false, error: 'Se requiere un pedido para eliminar'});
+  try {
+
+    //consulta SQL para eliminar un pedido específico
+    const queryText = 'DELETE FROM pedidos WHERE codigo = $1';
+    const values = [codigoPedido];
+
+    //EJECUTAMOS EL SQL CON SUS PARAMETROS
+    const result = await db.query(queryText, values);
+
+    if (result.rowCount > 0) {
+      // si se eliminó al menos una fila
+      console.log(`Pedido con codigo ${codigoPedido} elimiando con éxito de la BD`);
+      res.json({success: true, mensaje: `Pedido con codigo ${codigoPedido} eliminado con éxito`});
+    } else {
+      //Si rowCount es 0 ningu pedido con ese codigo fue elimiando
+      res.status(404).json({success: false, error: `Pedido con codigo ${codigoPedido} no encontrado para eliminar`});
     }
+
+  } catch (error) {
+    console.error(`Error al eliminar el pedido ${codigoPedido} --- Error: ${error}`);
+    res.status(500).json({success: false, error: `Error interno del servidor`});
+  }
 
 });
 
@@ -613,7 +697,11 @@ app.get('/api/corte', async (req, res) => {
 });;
 
 // -- Endpoint para obtener todos los pedidos (como lo haría el rol "admin")
-app.get('/api/pedidos.json', async (req, res) =>{
+app.get('/api/pedidos.json', verifyToken, async (req, res) => {
+  if (!req.user || req.user.role !== 'admin'){
+    console.warn(`El usuario ${req.user} está intentando acceder a funciones de administrador. REVISAR LA SEGURIDAD DEL ENDPOINT`);
+    return res.status(403).json({success: false, error: 'Acceso denegado: No cuentas con los permisos necesarios para acceder a esta función'});
+  }
   try {
     //vamos a ejecutar una consulta SQL para obtener todos los pedidos ordenados por hora descendente
     const result = await db.query('SELECT * FROM pedidos ORDER BY hora DESC');
@@ -632,15 +720,32 @@ app.get('/api/pedidos.json', async (req, res) =>{
   res.json(pedidos);
 });*/
 
-// Middlware para verificar si el usuario está autenticado
-function isAuthenticated(req, res, next){
-  if (req.session && req.session.user){
-    //si hay usuario autenticado continaur a la siguiente funcion
-    next();
-  }else {
-  // si no hay u suario autenticado devolver un error
-  res.status(401).json({success: false, error: 'Sin autorización, por favor inicia sesión'});
+// Middleware para verificar el token JWT
+function verifyToken(req, res, next){
+  //obtener el token del encabezado Authorization
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; //Divide el "Bearer" y toma unicamente el token
+
+  if (token === null){
+    // si no hay token denegar acceso
+    return res.status(401).json({success: false, error: 'Acceso denegado: Token no proporcionado'});    
   }
+  // verificar el token 
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) =>{
+    if (err){
+      console.error(`error al verificar el token JWT -- ERROR: ${error}`);
+      return res.status(403).json({success: false, error: 'Acceso denegado: Token inválido o expirado'}); 
+    }
+
+    //si el token es válido, adjuntar la infomraicon del usuario codificada
+      req.user = user;
+
+      //continuar con el siguiente middleware / manejador de ruta
+      next();
+
+  });
+
+
 }
 
 server.listen(PORT, () => {
