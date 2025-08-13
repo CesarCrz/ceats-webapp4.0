@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 const jwt = require('jsonwebtoken'); 
 const db = require('./db'); //importa el modulo de acceso a datos
 const { comparePassword } = require ('./utils/authUtils');
-require('dotenv').config({path: __dirname + '/../../env'});
+require('dotenv').config();
 
 // Rutas relativas al backend/src
 const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
@@ -95,8 +95,6 @@ app.post('/api/login', async (req, res) => {
         sucursal: user.sucursal //cuando un usuario sea admin va a ser null 
       }
 
-      console.log(`Login exitoso para usuario ${user.email} - ${user.role}`);
-
       //y por ultimo con todo lo anterior completado enviarmos la informacion al frontend
 
       const JWT_SECRET = process.env.JWT_SECRET;
@@ -111,7 +109,7 @@ app.post('/api/login', async (req, res) => {
       {expiresIn: '4h'}
       );
 
-
+      console.log(`Login exitoso para usuario ${user.email} - ${user.role}`);
 
       res.json({
         success: true,
