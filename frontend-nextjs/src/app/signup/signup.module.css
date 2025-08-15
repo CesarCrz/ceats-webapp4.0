@@ -1,0 +1,160 @@
+/* frontend-nextjs/src/app/signup/signup.module.css */
+
+/* Contenedor principal similar a .login-screen */
+.signupContainer {
+    width: 100vw;
+    min-height: 100vh; /* Usamos min-height para que crezca si el contenido es largo */
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    display: flex;
+    align-items: center; /* Centra verticalmente */
+    justify-content: center; /* Centra horizontalmente */
+    padding: 20px; /* Añadir padding para evitar que el contenido toque los bordes en móviles */
+  }
+  
+  /* Tarjeta del formulario similar a .login-card */
+  .signupCard {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    width: 100%;
+    max-width: 600px; /* Puedes ajustar el ancho máximo para el formulario de registro */
+    margin: auto; /* Centrar la tarjeta */
+  }
+  
+  /* Header del formulario similar a .login-header */
+  .signupHeader {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    color: var(--white);
+    padding: 20px 30px; /* Ajustar padding */
+    text-align: center;
+    border-top-left-radius: var(--radius); /* Asegurar bordes redondeados */
+    border-top-right-radius: var(--radius);
+  }
+  
+  .signupHeader h1 {
+    font-size: 1.8rem; /* Mantener tamaño similar */
+    margin-bottom: 0; /* Ajustar margen */
+  }
+  
+  /* Formulario interior similar a .login-form */
+  .signupForm {
+    padding: 30px;
+  }
+  
+  /* Grupos de formulario similar a .form-group */
+  .formGroup {
+    margin-bottom: 20px;
+  }
+  
+  .formGroup label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--dark);
+  }
+  
+  .formGroup input[type="text"],
+  .formGroup input[type="email"],
+  .formGroup input[type="password"],
+  .formGroup input[type="tel"],
+  .formGroup input[type="date"],
+  .formGroup input[type="checkbox"] {
+    width: 100%; /* Ancho completo */
+    padding: 12px 15px;
+    border: 2px solid var(--light);
+    border-radius: var(--radius); /* Bordes redondeados */
+    font-size: 16px;
+    transition: all 0.3s ease;
+    box-sizing: border-box; /* Incluir padding y borde en el ancho */
+  }
+  
+  .formGroup input[type="checkbox"] {
+      width: auto; /* El checkbox no debe ser 100% de ancho */
+      margin-right: 10px;
+      vertical-align: middle; /* Alinear verticalmente con el label */
+  }
+  
+  .formGroup input[type="text"]:focus,
+  .formGroup input[type="email"]:focus,
+  .formGroup input[type="password"]:focus,
+  .formGroup input[type="tel"]:focus,
+  .formGroup input[type="date"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+  }
+  
+  /* Estilo para el botón de registro */
+  .signupButton {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px; /* Espacio arriba */
+  }
+  
+  .signupButton:hover:not(:disabled) { /* No aplicar hover si está deshabilitado */
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .signupButton:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+  }
+  
+  
+  /* Estilos para los mensajes de feedback */
+  .messageSuccess {
+      color: var(--success);
+      text-align: center;
+      margin-bottom: 15px;
+      font-weight: 600;
+  }
+  
+  .messageError {
+      color: var(--danger);
+      text-align: center;
+      margin-bottom: 15px;
+      font-weight: 600;
+  }
+  
+  .loadingMessage {
+      color: var(--primary);
+      text-align: center;
+      margin-bottom: 15px;
+      font-weight: 600;
+  }
+  
+  /* Estilos para los subtítulos del formulario (Información del Restaurante, etc.) */
+  .signupForm h2 {
+    font-size: 1.3rem;
+    color: var(--primary);
+    margin-top: 25px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--light);
+    padding-bottom: 8px;
+  }
+  
+  .signupForm h2:first-of-type {
+      margin-top: 0; /* No hay margen superior en el primer subtítulo */
+  }
+  
+  /* Estilos para el enlace de términos y condiciones */
+  .termsLink {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+  }
+  
+  .termsLink:hover {
+      text-decoration: underline;
+  }
+  

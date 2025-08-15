@@ -1,13 +1,32 @@
+/* frontend-nextjs/src/app/globals.css */
+
+/* Variables CSS de tu tema original */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --primary: #1e40af;
+  --primary-light: #3b82f6;
+  --secondary: #f59e0b;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #06b6d4;
+  --light: #f8fafc;
+  --dark: #1e293b;
+  --white: #ffffff;
+  --gray: #64748b;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --radius: 12px;
+
+  /* Opcional: Conservar variables de tema oscuro si las usas */
+  --background-dark-mode: #0a0a0a;
+  --foreground-dark-mode: #ededed;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Reseteo básico (combinado del original y Next.js default) */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 html,
@@ -16,27 +35,31 @@ body {
   overflow-x: hidden;
 }
 
+/* Estilos de body con tu fuente y color base de marca */
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Verdana, sans-serif;
+  /* El background gradiente se aplicará en el contenedor de la página */
+  /* background: var(--background);  <-- Usarías si tu fondo base no fuera gradiente */
+  color: var(--dark); /* Color de texto base de tu marca */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5; /* Buena práctica para legibilidad */
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
+/* Reseteo de enlaces */
 a {
   color: inherit;
   text-decoration: none;
 }
 
+/* Opcional: Estilos para tema oscuro si usas las variables */
 @media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+  /*body {
+    color: var(--foreground-dark-mode);
+    background: var(--background-dark-mode);
+  }*/
 }
+
+/* Puedes añadir aquí otros estilos globales que necesites */
+/* Por ejemplo, estilos para contenedores principales, utilidades, etc. */
+/* .container { max-width: 1200px; margin: 0 auto; padding: 0 15px; } */

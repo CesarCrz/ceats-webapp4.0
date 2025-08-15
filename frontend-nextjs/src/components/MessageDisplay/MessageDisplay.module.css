@@ -1,0 +1,57 @@
+/* frontend-nextjs/src/components/MessageDisplay/MessageDisplay.module.css */
+
+/* Contenedor principal de los toasts */
+.toastContainer {
+    position: fixed; /* Posiciona el contenedor de forma fija en la ventana */
+    top: 20px; /* Distancia desde la parte superior */
+    right: 20px; /* Distancia desde la parte derecha */
+    z-index: 10000; /* Asegura que esté por encima de la mayoría de los elementos */
+    display: flex;
+    flex-direction: column; /* Apila los toasts verticalmente */
+    gap: 10px; /* Espacio entre los toasts */
+}
+
+/* Estilo base para un toast individual */
+.toast {
+    background: var(--white); /* Fondo blanco usando variable global */
+    padding: 15px 20px;
+    border-radius: var(--radius); /* Bordes redondeados usando variable global */
+    box-shadow: var(--shadow-lg); /* Sombra grande usando variable global */
+    border-left: 4px solid var(--info); /* Borde izquierdo de color (por defecto info) */
+    display: flex;
+    align-items: center; /* Centra verticalmente el contenido */
+    gap: 10px;
+    min-width: 300px; /* Ancho mínimo */
+    /* Initial state for animation */
+    /* transform: translateX(100%); */ /* Oculto inicialmente a la derecha */
+    /* opacity: 0; */ /* Transparente inicialmente */
+    /* transition: all 0.3s ease; */ /* Animación al mostrar */
+
+    /* NOTA: La animación "show" se manejaría en JavaScript en el componente React
+             aplicando una clase 'show' si usas animaciones CSS/clases como tu original.
+             Para empezar, podemos omitir las propiedades de animación y hacer que aparezcan directamente.
+             Si quieres animaciones, podemos añadir lógica en React después. */
+}
+
+/* Modificadores de color para el borde izquierdo */
+.toast.success { border-left-color: var(--success); } /* Borde verde para éxito */
+.toast.error { border-left-color: var(--danger); }   /* Borde rojo para error */
+.toast.info { border-left-color: var(--primary); }    /* Borde azul para info (usando primary de tu tema) */
+/* NOTA: Tu CSS original tenía .toast.warning, si necesitas warning, añádelo aquí */
+
+
+/* Botón para cerrar el toast */
+.toastClose {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray); /* Color gris usando variable global */
+    margin-left: auto; /* Empuja el botón a la derecha */
+    font-size: 1rem; /* Tamaño del icono o texto "X" */
+    padding: 0; /* Eliminar padding por defecto del botón */
+    line-height: 1; /* Asegurar alineación */
+}
+
+.toastClose:hover {
+    color: var(--dark); /* Cambiar color al pasar el mouse */
+}
