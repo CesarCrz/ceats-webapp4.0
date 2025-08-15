@@ -37,7 +37,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es"> {/* Idioma */}
-      {/* ** Aplicar las variables de fuente en el body si usas las fuentes ** */}
       <body className={`${geistSans.variable} ${geistMono.variable}`}> {/* O elimina si no las usas */}
         {/* ** Envuelve el contenido principal con el Proveedor de Mensajes ** */}
         <MessageProvider>
