@@ -21,6 +21,11 @@ const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
 const FRONTEND_ROOT = path.join(__dirname, '..', '..', 'frontend');
 const FRONTEND_SRC = path.join(FRONTEND_ROOT, 'src');
 
+// middleware para permitir el cors NOTA ESTO 
+//SE DEBE CAMBIAR POR CADA DOMINIO A USAR UNA VEZ EN PRODUCCION POR EJEMPLO:
+// en lugar de dejar cors() se debe especificar cors({ orogin: 'https://tudominio.com.mx'})
+app.use(cors())
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
