@@ -130,3 +130,180 @@
 insert into usuarios (email, password_hash, role , sucursal) values ('sushisoruTesoro@gmail.com', 'tu_contraseña_hasheada.', 'sucursal', 'TESORO');
 
 insert into usuarios (email, password_hash, role, sucursal) values ('sushisoru@gmail.com', 'tu_contraseña_hasheada, 'admin', NULL);
+
+
+
+---- NUEVA INFORMACION DESDE LA ULTIMA ACTUALIZACION!!!!! --------
+
+-- Script SQL para el esquema de la base de datos cEats_db usando UUIDs
+-- Nombre de la Base de Datos del Sistema: ceats_db
+
+-- Si ya tienes una base de datos PostgreSQL creada, úsala (CREATE DATABASE ceats_db;).
+-- Conéctate a la base de datos ceats_db (o como la hayas llamado).
+
+-- Asegurarse de que la función para generar UUIDs está disponible (para PostgreSQL 13+)
+-- Si usas una versión anterior, necesitarías ejecutar: CREATE EXTENSION "uuid-ossp";
+-- Puedes probar si gen_random_uuid() existe ejecutando: SELECT gen_random_uuid();
+
+
+-- Eliminar tablas existentes si es necesario (¡CUIDADO: ESTO BORRA TODOS LOS DATOS!)
+-- Si estás empezando limpio o no te importan los datos existentes,
+-- descomenta las siguientes líneas:
+-- DROP TABLE IF EXISTS pedidos;
+-- DROP TABLE IF EXISTS usuarios;
+-- DROP TABLE IF EXISTS sucursales;
+-- DROP TABLE IF EXISTS restaurantes;
+
+
+-- Crear la tabla restaurantes
+-- Almacena información general de cada restaurante
+CREATE TABLE restaurantes (
+    restaurante_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Identificador único del restaurante
+    nombre VARCHAR(255) NOT NULL, -- Nombre legal o comercial del restaurante
+    nombre_contacto_legal VARCHAR(255) NOT NULL, -- Nombre completo de la persona que registra (administrador principal)
+    email_contacto_legal VARCHAR(255) UNIQUE NOT NULL, -- Correo electrónico del contacto legal (será el email del usuario admin y login)
+    telefono_contacto_legal VARCHAR(50), -- Teléfono del contacto legal
+    direccion_fiscal VARCHAR(255), -- Dirección fiscal del restaurante
+    rfc VARCHAR(20), -- RFC del restaurante
+    fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Fecha y hora del registro del restaurante
+    terminos_aceptados_at TIMESTAMP WITH TIME ZONE NOT NULL, -- Marca de tiempo de cuándo se aceptaron los términos
+    is_active BOOLEAN DEFAULT TRUE -- Indica si el restaurante está activo en la plataforma
+);
+
+-- Crear la tabla sucursales
+-- Almacena información de las sucursales, vinculadas a un restaurante
+CREATE TABLE sucursales (
+    sucursal_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Identificador único de la sucursal
+    restaurante_id UUID NOT NULL REFERENCES restaurantes(restaurante_id) ON DELETE CASCADE, -- Clave foránea al restaurante padre
+    nombre_sucursal VARCHAR(255) NOT NULL, -- Nombre con el que se identifica la sucursal (ej. "Sucursal Centro")
+    direccion VARCHAR(255) NOT NULL, -- Dirección física de la sucursal
+    telefono_contacto VARCHAR(50) NOT NULL, -- Teléfono de contacto de la sucursal
+    email_contacto_sucursal VARCHAR(255) UNIQUE, -- Correo electrónico opcional asociado a esta sucursal
+    ciudad VARCHAR(100), -- Ciudad de la sucursal
+    estado VARCHAR(100), -- Estado/Provincia de la sucursal
+    codigo_postal VARCHAR(20), -- Código postal de la sucursal
+    latitud DECIMAL, -- Coordenadas geográficas (opcional)
+    longitud DECIMAL, -- Coordenadas geográficas (opcional)
+    fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Fecha y hora de creación de la sucursal
+    is_active BOOLEAN DEFAULT TRUE -- Indica si la sucursal está activa
+);
+
+-- Crear la tabla usuarios
+-- Almacena información de los usuarios que acceden a la plataforma (admins de restaurante, cuentas de sucursal)
+CREATE TABLE usuarios (
+    usuario_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Identificador único del usuario
+    email VARCHAR(255) UNIQUE NOT NULL, -- Correo electrónico del usuario (será el nombre de usuario para login)
+    password_hash VARCHAR(255) NOT NULL, -- Hash seguro de la contraseña
+    role VARCHAR(50) NOT NULL, -- Rol del usuario ('admin', 'sucursal_user', etc.)
+    restaurante_id UUID NOT NULL REFERENCES restaurantes(restaurante_id) ON DELETE CASCADE, -- Clave foránea al restaurante al que pertenece este usuario
+    sucursal_id UUID NULL REFERENCES sucursales(sucursal_id) ON DELETE SET NULL, -- Clave foránea a la sucursal asignada (NULL para usuarios 'admin' de restaurante)
+    nombre VARCHAR(100) NOT NULL, -- Nombre del usuario
+    apellidos VARCHAR(100) NOT NULL, -- Apellidos del usuario
+    fecha_nacimiento DATE, -- Fecha de nacimiento del usuario (opcional, si se recolecta)
+    telefono VARCHAR(50), -- Teléfono del usuario (opcional)
+    fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Fecha y hora de registro del usuario
+    is_email_verified BOOLEAN DEFAULT FALSE, -- Indica si el correo electrónico ha sido verificado
+    verification_code VARCHAR(10), -- Código/Pin temporal para verificación de email
+    verification_code_expires_at TIMESTAMP WITH TIME ZONE, -- Fecha y hora de expiración del código de verificación
+    is_active BOOLEAN DEFAULT TRUE -- Indica si el usuario está activo y puede iniciar sesión
+);
+
+-- Crear la tabla pedidos
+-- Almacena los pedidos individuales, vinculados a una sucursal específica
+CREATE TABLE pedidos (
+    pedido_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Identificador único del pedido (PK interna)
+    codigo VARCHAR(50) UNIQUE NOT NULL, -- Código externo del pedido (ej. generado por WhatsApp, debe ser único)
+    sucursal_id UUID NOT NULL REFERENCES sucursales(sucursal_id) ON DELETE CASCADE, -- Clave foránea a la sucursal que recibió este pedido
+    deliver_or_rest VARCHAR(50), -- Tipo de entrega: 'domicilio' o 'recoger'
+    estado VARCHAR(50), -- Estado actual del pedido (ej. 'Pendiente', 'En Preparacion', 'Listo', 'Entregado', 'Cancelado')
+    nombre VARCHAR(100), -- Nombre del cliente que hizo el pedido
+    celular VARCHAR(50), -- Número de celular del cliente
+    pedido JSONB, -- Detalles de los items del pedido en formato JSONB (más flexible que TEXT)
+    instrucciones TEXT, -- Instrucciones especiales del cliente
+    entregar_a VARCHAR(100), -- Nombre de la persona que recibirá el pedido (puede ser diferente al nombre del cliente si es recoger)
+    domicilio VARCHAR(255), -- Dirección completa si el pedido es a domicilio (NULL si es recoger)
+    total DECIMAL(10, 2), -- Monto total del pedido
+    currency VARCHAR(10), -- Moneda del total (ej. 'MXN')
+    pago VARCHAR(50), -- Método de pago (ej. 'efectivo', 'tarjeta', NULL si es recoger o se paga en sucursal)
+    fecha DATE, -- Fecha en que se hizo el pedido
+    hora TIME, -- Hora en que se hizo el pedido
+    tiempo VARCHAR(50), -- Tiempo estimado de preparación/entrega en texto (ej. "30 minutos"). **Considerar añadir campo INT para countdown.**
+    fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Timestamp exacto de creación del pedido (más preciso que fecha y hora separadas)
+);
+
+-- Opcional: Crear índices para mejorar rendimiento en búsquedas comunes
+CREATE INDEX idx_pedidos_sucursal_id ON pedidos (sucursal_id);
+CREATE INDEX idx_pedidos_estado ON pedidos (estado);
+CREATE INDEX idx_pedidos_fecha ON pedidos (fecha); -- Índice en la columna DATE
+CREATE INDEX idx_pedidos_fecha_creacion ON pedidos (fecha_creacion); -- Índice en el TIMESTAMP
+
+-- Considera un índice en la combinación de sucursal_id y estado para búsquedas comunes
+CREATE INDEX idx_pedidos_sucursal_estado ON pedidos (sucursal_id, estado);
+-- Considera un índice en la combinación de sucursal_id y fecha_creacion para consultas de rango de tiempo por sucursal
+CREATE INDEX idx_pedidos_sucursal_fecha_creacion ON pedidos (sucursal_id, fecha_creacion DESC);
+
+
+-- Comentarios (opcional pero bueno)
+COMMENT ON TABLE restaurantes IS 'Almacena información general de cada restaurante.';
+COMMENT ON TABLE sucursales IS 'Almacena información de las sucursales, vinculadas a un restaurante.';
+COMMENT ON TABLE usuarios IS 'Almacena información de los usuarios que acceden a la plataforma (restauranteros admin, cuentas de sucursal), vinculados a restaurante/sucursal.';
+COMMENT ON TABLE pedidos IS 'Almacena los pedidos individuales, vinculados a una sucursal específica.';
+
+COMMENT ON COLUMN restaurantes.restaurante_id IS 'Identificador único UUID del restaurante.';
+COMMENT ON COLUMN sucursales.sucursal_id IS 'Identificador único UUID de la sucursal.';
+COMMENT ON COLUMN sucursales.restaurante_id IS 'Clave foránea al restaurante al que pertenece la sucursal.';
+COMMENT ON COLUMN usuarios.usuario_id IS 'Identificador único UUID del usuario.';
+COMMENT ON COLUMN usuarios.restaurante_id IS 'Clave foránea al restaurante al que pertenece este usuario.';
+COMMENT ON COLUMN usuarios.sucursal_id IS 'Clave foránea a la sucursal a la que está asignado este usuario (NULL para admins de restaurante).';
+COMMENT ON COLUMN pedidos.pedido_id IS 'Identificador único UUID interno del pedido.';
+COMMENT ON COLUMN pedidos.sucursal_id IS 'Clave foránea a la sucursal que recibió este pedido.';
+COMMENT ON COLUMN pedidos.codigo IS 'Código externo único del pedido (ej. de WhatsApp).';
+
+
+-- Ejemplo de cómo insertar un usuario administrador inicial (si no usas la ruta API)
+-- Reemplaza 'restaurante_uuid_aqui' con el UUID real de un restaurante ya creado
+-- Reemplaza 'hash_de_tu_contraseña_aqui' con el hash bcrypt de la contraseña
+-- Reemplaza 'admin@ejemplo.com' y datos personales reales
+/*
+INSERT INTO usuarios (email, password_hash, role, restaurante_id, nombre, apellidos, fecha_nacimiento, telefono, is_email_verified, is_active)
+VALUES (
+    'admin@ejemplo.com',
+    '$2b$10$hash_de_tu_contraseña_aqui', -- Reemplaza con el hash real
+    'admin',
+    'restaurante_uuid_aqui', -- Reemplaza con el UUID del restaurante
+    'Nombre Admin',
+    'Apellido Admin',
+    '1990-01-01', -- Fecha de nacimiento en formato YYYY-MM-DD
+    '1234567890',
+    TRUE, -- Opcional: si ya quieres que esté verificado inicialmente
+    TRUE
+);
+*/
+
+-- Ejemplo de cómo insertar un usuario de sucursal inicial (si no usas la ruta API)
+-- Reemplaza 'sucursal_uuid_aqui' con el UUID real de una sucursal ya creada
+-- Reemplaza 'restaurante_uuid_aqui' con el UUID real del restaurante padre de la sucursal
+-- Reemplaza 'hash_de_tu_contraseña_aqui' con el hash bcrypt de la contraseña
+-- Reemplaza 'sucursal@ejemplo.com' y datos personales reales
+/*
+INSERT INTO usuarios (email, password_hash, role, restaurante_id, sucursal_id, nombre, apellidos, fecha_nacimiento, telefono, is_email_verified, is_active)
+VALUES (
+    'sucursal@ejemplo.com',
+    '$2b$10$hash_de_tu_contraseña_aqui', -- Reemplaza con el hash real
+    'sucursal_user',
+    'restaurante_uuid_aqui', -- Reemplaza con el UUID del restaurante padre
+    'sucursal_uuid_aqui', -- Reemplaza con el UUID de la sucursal
+    'Nombre Sucursal',
+    'Apellido Sucursal',
+    NULL, -- Fecha de nacimiento opcional
+    '0987654321',
+    TRUE, -- Opcional
+    TRUE
+);
+*/
+
+
+-- NOTA: Los ejemplos de INSERT para pedidos que estaban antes
+-- ahora necesitarían usar los UUIDs de las sucursales y el formato de la nueva tabla.
+-- Si necesitas insertar pedidos de prueba, primero crea un restaurante y una sucursal
+-- con el script de arriba, obtén sus UUIDs, y luego úsalos en los INSERTs de pedidos.
