@@ -6,11 +6,11 @@ const saltrounds = 10;
    /**
      * Compara una contraseña de texto plano con un hash bcrypt existente de forma asincrona.
      * @param {string} password - La contraseña en texto plano a comparar.
-     * @param {string} hash - El hash bcrypt almacenado.
+     * @param {string} hash - El hash bcrypt almacenado (retornado).
      * @returns {Promise<boolean>} Una promesa que resuelve con true si la contraseña coincide con el hash, false en caso contrario.
      */
 
-async function hashPasswords(password){
+async function hashPassword(password){
     if (!password || typeof password !== 'string'){
         throw new Error ('La contraseña debe ser un string valido');
     }
@@ -43,6 +43,6 @@ async function comparePassword(password, hash){
 //exportamos las funciones para que puedan ser usadas en otros modulos
 
 module.exports = {
-    hashPasswords,
+    hashPassword,
     comparePassword,
 };

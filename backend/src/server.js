@@ -11,7 +11,7 @@ const io = socketIo(server)
 const PORT = process.env.PORT || 3000;
 const jwt = require('jsonwebtoken'); 
 const db = require('./db'); //importa el modulo de acceso a datos
-const { comparePassword } = require ('./utils/authUtils');
+const { comparePassword, hashPassword } = require ('./utils/authUtils');
 require('dotenv').config();
 
 // Rutas relativas al backend/src
@@ -125,7 +125,142 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// - Endpoint para el registro de Restauranteros (admin de un restaurante)
 
+app.post('/api/register-restaurantero', async (req, res) =>{
+  //recibir y validar los datos del cuerpo de la solicitud
+  const {
+    nombreRestaurante,
+    nombreContactoLegal,
+    apellidosContactoLegal,
+    emailContactoLegal,
+    password,
+    telefonoContactolegal,
+    direccionFiscal,
+    fechaNacimientoContactoLegal
+  } = req.body;
+
+  // agreggamos validaciones basicas 
+  if (!nombreRestaurante || !nombreContactoLegal || !apellidosContactoLegal || !emailContactoLegal || !password || !telefonoContactolegal || !direccionFiscal || !fechaNacimientoContactoLegal){
+    return res.status(400).json({success: false, message: 'No se puede completar el registro hacen falta datos esenciales.'});
+  }
+
+  //validar el formato basico del email 
+  if (!/\S+@\S+\.\S+/.test(emailContactoLegal)){
+    return res.status(400).json({success: false, message: 'El formato del email es incorrecto'});
+  }
+
+  // vamos a declarar client para asegurarnos poder usarlo en el finally
+
+  let client;
+
+  try {
+    // INICIAR
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    // hashear la contraseña del usuario admin
+    const hashedPassword = await hashPassword(password)
+
+    // convertir fechaNacimiento a date
+    const fechaNacimientoDate = new Date(fechaNacimientoContactoLegal);
+    if (isNaN(fechaNacimientoDate.getTime())){
+      // si la fecha no es valida 
+      await client.query('ROLLBACK');
+      return res.status(400).json({success: false, message: 'Formato de la fecha invalida'});
+    }
+
+    const fechaNacimientoDB = fechaNacimientoDate.toISOString().split('T')[0]; // Convertir a 'YYYY-MM-DD'
+
+    //insertar una nueva fila en la tabla 'restaurantes'
+    const insertRestauranteQuery = `
+    INSERT INTO restaurantes (nombre, nombre_contacto_legal, email_contacto_legal, telefono_contacto_legal, direccion_fiscal, terminos_aceptados_at)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING restaurante_id; -- Recuperar el ID UUID del restaurante recién creado
+    `;
+
+    const now = new Date();
+
+    const restaurantVal = [
+      nombreRestaurante,
+      nombreContactoLegal,
+      emailContactoLegal,
+      telefonoContactolegal,
+      direccionFiscal,
+      now
+    ];
+
+    const restaurantResult = await client.query(insertRestauranteQuery, restaurantVal);
+    const nuevoRestauranteId = restaurantResult.rows[0].restaurante_id;
+    // Insertar una nueva fila en la tabla 'usuarios' para el administrador
+    // Incluimos todos los campos definidos en la tabla usuarios
+    const insertUsuarioQuery = `
+        INSERT INTO usuarios (
+            email, password_hash, role, restaurante_id,
+            nombre, apellidos, fecha_nacimiento, telefono, fecha_registro,
+            is_email_verified, verification_code, verification_code_expires_at, is_active
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING usuario_id; -- Opcional: recuperar ID UUID del usuario
+    `;
+
+    // Generar pin y expiración para verificación de email
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // Pin de 6 dígitos
+    const verificationCodeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Válido por 24 horas
+
+    const usuarioValues = [
+        emailContactoLegal,
+        hashedPassword,
+        'admin', // Rol de administrador para este usuario
+        nuevoRestauranteId, // Vincular al restaurante recién creado
+        nombreContactoLegal,
+        apellidosContactoLegal,
+        fechaNacimientoDB, // Usamos la fecha parseada
+        telefonoContactolegal,
+        now, // Fecha de registro del usuario
+        false, // is_email_verified inicialmente false
+        verificationCode,
+        verificationCodeExpiresAt,
+        true // is_active inicialmente true
+    ];
+
+    const usuarioResult = await client.query(insertUsuarioQuery, usuarioValues);
+    const nuevoUsuarioId = usuarioResult.rows[0].usuario_id; // Puedes usar este ID si lo necesitas
+
+    await client.query('COMMIT');
+
+    // Responder al frontend con éxito
+    // NOTA: Aquí es donde idealmente se activaría el envío del email de verificación
+    // con el pin al emailContactoLegal.
+    console.log(`Restaurante "${nombreRestaurante}" (${nuevoRestauranteId}) y Administrador "${emailContactoLegal}" (${nuevoUsuarioId}) registrados con éxito. Pin de verificación: ${verificationCode}`); // Loggear pin en desarrollo (QUITAR EN PRODUCCIÓN!)
+
+    res.status(201).json({
+      success: true,
+      message: 'Restaurante y usuario administrador registrado con exito. Por favor, verifique su correo electrónico con el pin enviado',
+      restauranteID: nuevoRestauranteId,
+      usuarioId: nuevoUsuarioId
+    })
+
+ 
+  } catch (error) {
+    //hacemos rollback si hay agun error
+    if (client){
+      await client.query('ROLLBACK');
+    }
+    console.error(`Error durante el registro del restaurante -- ERROR: ${error}`);
+
+    //manejar error de duplicidad de email
+    if (error.code === '23505'){
+      return res.status(409).json({success: false, error: 'Error interno del servidor durante el registro'});
+    }
+
+  }finally{
+    //liberar al cliente de Db
+    if (client){
+      client.release();
+    }
+  }
+});
 
 
 /*function cargarPedidos() {
@@ -744,9 +879,9 @@ function verifyToken(req, res, next){
       next();
 
   });
-
-
 }
+
+
 
 server.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

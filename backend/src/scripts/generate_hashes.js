@@ -1,6 +1,6 @@
 //vamos a importar la utilidad de hasheo desde el modulo authUtils.js
 
-const { hashPasswords } = require('../utils/authUtils');
+const { hashPassword } = require('../utils/authUtils');
 
 /** 
  * Funcion par hashear una contraseña y mostrarla en consola
