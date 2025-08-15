@@ -36,7 +36,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es"> {/* Idioma */}
+    //idioma
+    <html lang="es"> 
       <body className={`${geistSans.variable} ${geistMono.variable}`}> {/* O elimina si no las usas */}
         {/* ** Envuelve el contenido principal con el Proveedor de Mensajes ** */}
         <MessageProvider>
