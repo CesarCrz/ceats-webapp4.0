@@ -141,13 +141,14 @@ app.post('/api/register-restaurantero', async (req, res) =>{
     apellidosContactoLegal,
     emailContactoLegal,
     password,
-    telefonoContactolegal,
+    telefonoContactoLegal,
     direccionFiscal,
     fechaNacimientoContactoLegal
   } = req.body;
 
   // agreggamos validaciones basicas 
-  if (!nombreRestaurante || !nombreContactoLegal || !apellidosContactoLegal || !emailContactoLegal || !password || !telefonoContactolegal || !direccionFiscal || !fechaNacimientoContactoLegal){
+  if (!nombreRestaurante || !nombreContactoLegal || !apellidosContactoLegal || !emailContactoLegal || !password || !telefonoContactoLegal || !direccionFiscal || !fechaNacimientoContactoLegal){
+    console.log(`estoy recibiendo del frontend los siguientes datos: ${JSON.stringify(req.body)}`);
     return res.status(400).json({success: false, message: 'No se puede completar el registro hacen falta datos esenciales.'});
   }
 
@@ -191,7 +192,7 @@ app.post('/api/register-restaurantero', async (req, res) =>{
       nombreRestaurante,
       nombreContactoLegal,
       emailContactoLegal,
-      telefonoContactolegal,
+      telefonoContactoLegal,
       direccionFiscal,
       now
     ];
@@ -222,7 +223,7 @@ app.post('/api/register-restaurantero', async (req, res) =>{
         nombreContactoLegal,
         apellidosContactoLegal,
         fechaNacimientoDB, // Usamos la fecha parseada
-        telefonoContactolegal,
+        telefonoContactoLegal,
         now, // Fecha de registro del usuario
         false, // is_email_verified inicialmente false
         verificationCode,

@@ -63,7 +63,16 @@ export default function SignupPage() {
 
 
         // Construir el objeto de datos
-        const formData = { /* ... */ };
+        const formData = { 
+            nombreRestaurante,
+            nombreContactoLegal,
+            apellidosContactoLegal,
+            emailContactoLegal,
+            password,
+            telefonoContactoLegal,
+            direccionFiscal,
+            fechaNacimientoContactoLegal
+        };
 
         console.log('Enviando datos:', formData);
 
