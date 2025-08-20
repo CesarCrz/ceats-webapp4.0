@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 const jwt = require('jsonwebtoken'); 
 const db = require('./db'); //importa el modulo de acceso a datos
 const { comparePassword, hashPassword } = require ('./utils/authUtils');
-const cors = require('cors');
+const cors = require('cors'); // Importa el middleware CORS
 require('dotenv').config();
 
 // Rutas relativas al backend/src
