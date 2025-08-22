@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { SucursalFormModal } from "@/components/sucursal-form-modal"
+import { DeleteConfirmationModal } from "@/components/delete-confirmation-modal"
 import { Plus, Search, MapPin, Phone, Users, Edit, Trash2, ArrowLeft, Building } from "lucide-react"
 import Link from "next/link"
 
@@ -20,7 +22,7 @@ interface Sucursal {
 
 export default function SucursalesPage() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [sucursales] = useState<Sucursal[]>([
+  const [sucursales, setSucursales] = useState<Sucursal[]>([
     {
       id: 1,
       nombre: "Sucursal Centro",
@@ -58,6 +60,50 @@ export default function SucursalesPage() {
       gerente: "Pedro Martín",
     },
   ])
+
+  const [showSucursalModal, setShowSucursalModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedSucursal, setSelectedSucursal] = useState<Sucursal | null>(null)
+  const [sucursalToDelete, setSucursalToDelete] = useState<Sucursal | null>(null)
+
+  const gerentes = ["María González", "Carlos Ruiz", "Ana López", "Pedro Martín", "Laura Sánchez", "Diego Torres"]
+
+  const handleAddSucursal = () => {
+    setSelectedSucursal(null)
+    setShowSucursalModal(true)
+  }
+
+  const handleEditSucursal = (sucursal: Sucursal) => {
+    setSelectedSucursal(sucursal)
+    setShowSucursalModal(true)
+  }
+
+  const handleDeleteSucursal = (sucursal: Sucursal) => {
+    setSucursalToDelete(sucursal)
+    setShowDeleteModal(true)
+  }
+
+  const handleSaveSucursal = (sucursalData: Omit<Sucursal, "id" | "usuarios">) => {
+    if (selectedSucursal) {
+      // Edit existing sucursal
+      setSucursales(sucursales.map((s) => (s.id === selectedSucursal.id ? { ...s, ...sucursalData } : s)))
+    } else {
+      // Add new sucursal
+      const newSucursal: Sucursal = {
+        ...sucursalData,
+        id: Math.max(...sucursales.map((s) => s.id)) + 1,
+        usuarios: 0,
+      }
+      setSucursales([...sucursales, newSucursal])
+    }
+  }
+
+  const handleConfirmDelete = () => {
+    if (sucursalToDelete) {
+      setSucursales(sucursales.filter((s) => s.id !== sucursalToDelete.id))
+      setSucursalToDelete(null)
+    }
+  }
 
   const filteredSucursales = sucursales.filter(
     (sucursal) =>
@@ -111,6 +157,7 @@ export default function SucursalesPage() {
             />
           </div>
           <Button
+            onClick={handleAddSucursal}
             className="bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transition-all duration-300 transform hover:scale-[1.02] cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -210,6 +257,7 @@ export default function SucursalesPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => handleEditSucursal(sucursal)}
                       className="glass hover:glass-strong bg-transparent cursor-pointer"
                     >
                       <Edit className="w-4 h-4" />
@@ -217,6 +265,7 @@ export default function SucursalesPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => handleDeleteSucursal(sucursal)}
                       className="glass hover:glass-strong text-destructive hover:text-destructive bg-transparent cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -225,9 +274,36 @@ export default function SucursalesPage() {
                 </div>
               ))}
             </div>
+
+            {filteredSucursales.length === 0 && (
+              <div className="text-center py-12">
+                <Building className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">No se encontraron sucursales</h3>
+                <p className="text-sm text-muted-foreground">
+                  {searchTerm ? "Intenta con otros términos de búsqueda" : "Añade tu primera sucursal para comenzar"}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <SucursalFormModal
+        isOpen={showSucursalModal}
+        onClose={() => setShowSucursalModal(false)}
+        onSave={handleSaveSucursal}
+        sucursal={selectedSucursal}
+        gerentes={gerentes}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Sucursal"
+        description="Estás a punto de eliminar la sucursal"
+        itemName={sucursalToDelete?.nombre || ""}
+      />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { OrderCard } from "@/components/order-card"
 import { OrderDetailModal } from "@/components/order-detail-modal"
 import { CancelOrderModal } from "@/components/cancel-order-modal"
+import { Order } from "@/types/orders"
 import {
   ChefHat,
   Clock,

@@ -20,17 +20,6 @@ interface CountrySelectorProps {
   className?: string
 }
 
-interface CountryApiResponse {
-  name: {
-    common: string
-  }
-  cca2: string
-  idd: {
-    root: string
-    suffixes: string[]
-  }
-}
-
 export function CountrySelector({ value, onChange, className }: CountrySelectorProps) {
   const [open, setOpen] = useState(false)
   const [countries, setCountries] = useState<Country[]>([])
@@ -43,8 +32,8 @@ export function CountrySelector({ value, onChange, className }: CountrySelectorP
         const data = await response.json()
 
         const formattedCountries: Country[] = data
-          .filter((country: CountryApiResponse) => country.idd?.root && country.idd?.suffixes?.length > 0)
-          .map((country: CountryApiResponse) => ({
+          .filter((country: any) => country.idd?.root && country.idd?.suffixes?.length > 0)
+          .map((country: any) => ({
             code: country.cca2,
             name: country.name.common,
             dialCode: country.idd.root + (country.idd.suffixes[0] || ""),
@@ -83,7 +72,7 @@ export function CountrySelector({ value, onChange, className }: CountrySelectorP
           aria-expanded={open}
           disabled={loading}
           className={cn(
-            "justify-between transition-all duration-200 cursor-pointer hover:scale-[1.02]",
+            "justify-between glass hover:glass-strong transition-all duration-200 cursor-pointer hover:scale-[1.02]",
             className,
           )}
         >
@@ -113,7 +102,7 @@ export function CountrySelector({ value, onChange, className }: CountrySelectorP
           />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-0">
+      <PopoverContent className="w-[320px] p-0 glass-strong">
         <Command>
           <CommandInput placeholder="Buscar país..." className="h-9" />
           <CommandList>

@@ -14,14 +14,13 @@ interface OrderCardProps {
 
 export function OrderCard({ order, onClick }: OrderCardProps) {
   const isNew = order.isNew || order.status === "new"
-  const itemsCount = order.items.length
 
   return (
     <Card
       className={cn(
-        "hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] cursor-pointer",
+        "glass-strong hover:glass transition-all duration-300 transform hover:scale-[1.02] cursor-pointer",
         isNew &&
-          "bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/30 dark:to-emerald-900/30 border-green-400/40 animate-pulse shadow-lg shadow-green-500/25 ring-1 ring-green-400/20",
+          "bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/30 dark:to-emerald-900/30 border-green-400/40 animate-pulse-slow shadow-lg shadow-green-500/25 ring-1 ring-green-400/20",
       )}
       onClick={onClick}
     >
@@ -57,7 +56,7 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
         </div>
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
-            {itemsCount} productos • ${order.total}
+            {order.items.length} productos • ${order.total}
           </div>
           <Button
             size="sm"

@@ -8,42 +8,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { X, Save } from "lucide-react"
+import { X, Building, Save } from "lucide-react"
 
-interface UserFormModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSave: (user: any) => void
-  user?: any | null
-  sucursales: string[]
+interface Sucursal {
+  id?: number
+  nombre: string
+  direccion: string
+  telefono: string
+  gerente: string
+  status: string
 }
 
-export function UserFormModal({ isOpen, onClose, onSave, user, sucursales }: UserFormModalProps) {
-  const [formData, setFormData] = useState({
+interface SucursalFormModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSave: (sucursal: Sucursal) => void
+  sucursal?: Sucursal | null
+  gerentes: string[]
+}
+
+export function SucursalFormModal({ isOpen, onClose, onSave, sucursal, gerentes }: SucursalFormModalProps) {
+  const [formData, setFormData] = useState<Sucursal>({
     nombre: "",
-    email: "",
-    rol: "",
-    sucursal: "",
-    status: "activo",
+    direccion: "",
+    telefono: "",
+    gerente: "",
+    status: "activa",
   })
 
   useEffect(() => {
-    if (user) {
-      setFormData(user)
+    if (sucursal) {
+      setFormData(sucursal)
     } else {
       setFormData({
         nombre: "",
-        email: "",
-        rol: "",
-        sucursal: "",
-        status: "activo",
+        direccion: "",
+        telefono: "",
+        gerente: "",
+        status: "activa",
       })
     }
-  }, [user, isOpen])
+  }, [sucursal, isOpen])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (formData.nombre && formData.email && formData.rol && formData.sucursal) {
+    if (formData.nombre && formData.direccion && formData.telefono && formData.gerente) {
       onSave(formData)
       onClose()
     }
@@ -52,10 +61,10 @@ export function UserFormModal({ isOpen, onClose, onSave, user, sucursales }: Use
   const handleClose = () => {
     setFormData({
       nombre: "",
-      email: "",
-      rol: "",
-      sucursal: "",
-      status: "activo",
+      direccion: "",
+      telefono: "",
+      gerente: "",
+      status: "activa",
     })
     onClose()
   }
@@ -66,10 +75,10 @@ export function UserFormModal({ isOpen, onClose, onSave, user, sucursales }: Use
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-              <img src="/user-icon.png" alt="User" className="w-4 h-4 text-primary" />
+              <Building className="w-4 h-4 text-primary" />
             </div>
             <DialogTitle className="text-lg font-bold text-primary">
-              {user ? "Editar Usuario" : "Nuevo Usuario"}
+              {sucursal ? "Editar Sucursal" : "Nueva Sucursal"}
             </DialogTitle>
           </div>
           <Button variant="ghost" size="sm" onClick={handleClose} className="cursor-pointer">
@@ -79,56 +88,51 @@ export function UserFormModal({ isOpen, onClose, onSave, user, sucursales }: Use
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="nombre">Nombre completo *</Label>
+            <Label htmlFor="nombre">Nombre de la sucursal *</Label>
             <Input
               id="nombre"
               value={formData.nombre}
               onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-              placeholder="Ej: María González"
+              placeholder="Ej: Sucursal Centro"
               className="glass focus:glass-strong"
               required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Correo electrónico *</Label>
+            <Label htmlFor="direccion">Dirección completa *</Label>
             <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="maria@ceats.com"
+              id="direccion"
+              value={formData.direccion}
+              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+              placeholder="Av. Juárez 123, Centro, CDMX"
               className="glass focus:glass-strong"
               required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="rol">Rol *</Label>
-            <Select value={formData.rol} onValueChange={(value) => setFormData({ ...formData, rol: value })}>
-              <SelectTrigger className="glass focus:glass-strong">
-                <SelectValue placeholder="Seleccionar rol" />
-              </SelectTrigger>
-              <SelectContent className="glass-strong">
-                <SelectItem value="Administrador">Administrador</SelectItem>
-                <SelectItem value="Gerente">Gerente</SelectItem>
-                <SelectItem value="Cocinero">Cocinero</SelectItem>
-                <SelectItem value="Mesero">Mesero</SelectItem>
-                <SelectItem value="Cajero">Cajero</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="telefono">Teléfono *</Label>
+            <Input
+              id="telefono"
+              value={formData.telefono}
+              onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+              placeholder="+52 55 1234 5678"
+              className="glass focus:glass-strong"
+              required
+            />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="sucursal">Sucursal *</Label>
-            <Select value={formData.sucursal} onValueChange={(value) => setFormData({ ...formData, sucursal: value })}>
+            <Label htmlFor="gerente">Gerente asignado *</Label>
+            <Select value={formData.gerente} onValueChange={(value) => setFormData({ ...formData, gerente: value })}>
               <SelectTrigger className="glass focus:glass-strong">
-                <SelectValue placeholder="Seleccionar sucursal" />
+                <SelectValue placeholder="Seleccionar gerente" />
               </SelectTrigger>
               <SelectContent className="glass-strong">
-                {sucursales.map((sucursal) => (
-                  <SelectItem key={sucursal} value={sucursal}>
-                    {sucursal}
+                {gerentes.map((gerente) => (
+                  <SelectItem key={gerente} value={gerente}>
+                    {gerente}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -142,8 +146,8 @@ export function UserFormModal({ isOpen, onClose, onSave, user, sucursales }: Use
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="glass-strong">
-                <SelectItem value="activo">Activo</SelectItem>
-                <SelectItem value="inactivo">Inactivo</SelectItem>
+                <SelectItem value="activa">Activa</SelectItem>
+                <SelectItem value="inactiva">Inactiva</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -159,7 +163,7 @@ export function UserFormModal({ isOpen, onClose, onSave, user, sucursales }: Use
             </Button>
             <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 cursor-pointer">
               <Save className="w-4 h-4 mr-2" />
-              {user ? "Actualizar" : "Crear"}
+              {sucursal ? "Actualizar" : "Crear"}
             </Button>
           </div>
         </form>

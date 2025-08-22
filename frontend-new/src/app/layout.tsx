@@ -18,7 +18,7 @@ const poppins = Poppins({
 export const metadata = {
   title: "cEats v2 - Sistema de Gestión de Restaurantes",
   description: "Plataforma profesional para la gestión integral de restaurantes",
-  generator: 'v0.app'
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
