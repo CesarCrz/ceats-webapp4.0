@@ -12,8 +12,15 @@ const PORT = process.env.PORT || 3000;
 const jwt = require('jsonwebtoken'); 
 const db = require('./db'); //importa el modulo de acceso a datos
 const { comparePassword, hashPassword } = require ('./utils/authUtils');
+const { sendVerificationEmail } = require('./utils/emailUtils');
 const cors = require('cors'); // Importa el middleware CORS
 require('dotenv').config();
+
+// Importar las nuevas rutas
+const restaurantesRoutes = require('./routes/restaurantes');
+const sucursalesRoutes = require('./routes/sucursales');
+const usuariosRoutes = require('./routes/usuarios');
+const authRoutes = require('./routes/auth');
 
 // Rutas relativas al backend/src
 const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
@@ -60,6 +67,12 @@ app.get('/main/pedidos/:sucursal', (req, res) => {
   res.sendFile(path.join(FRONTEND_SRC, 'pages', 'main.html'));
 });
 
+// Registrar las nuevas rutas de la API
+app.use('/api/restaurantes', restaurantesRoutes);
+app.use('/api/sucursales', sucursalesRoutes);
+app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/auth', authRoutes);
+
 // --  Endpoint para el inicio de sesión
 
 app.post('/api/login', async (req, res) => {
@@ -92,13 +105,25 @@ app.post('/api/login', async (req, res) => {
         return res.status(401).json({success: false, error: 'Email o contraseña incorrectos'});
       }
 
+      // Verificar que el email esté verificado
+      if (!user.is_email_verified) {
+        return res.status(401).json({
+          success: false, 
+          error: 'Tu email no ha sido verificado. Por favor, verifica tu email antes de iniciar sesión.'
+        });
+      }
+
       // si la contraseña coincide, el usuario está autenticado
-      //vamos a almacenar la informacion relevante dle usuario en el objeto de sesión (req.session.user)
+      //vamos a almacenar la informacion relevante del usuario en el objeto de sesión (req.session.user)
 
       req.session.user = {
         email: user.email,
         role: user.role,
-        sucursal: user.sucursal //cuando un usuario sea admin va a ser null 
+        sucursal_id: user.sucursal_id, //cuando un usuario sea admin va a ser null 
+        restaurante_id: user.restaurante_id,
+        usuario_id: user.usuario_id,
+        nombre: user.nombre,
+        apellidos: user.apellidos
       }
 
       //y por ultimo con todo lo anterior completado enviarmos la informacion al frontend
@@ -107,9 +132,13 @@ app.post('/api/login', async (req, res) => {
       const token = jwt.sign({
         email: user.email,
         role: user.role,
-        sucursal:user.sucursal
+        sucursal_id: user.sucursal_id,
+        restaurante_id: user.restaurante_id,
+        usuario_id: user.usuario_id,
+        nombre: user.nombre,
+        apellidos: user.apellidos
       },
-      JWT_SECRET,
+      process.env.JWT_SECRET,
       {expiresIn: '4h'}
       );
 
@@ -119,15 +148,37 @@ app.post('/api/login', async (req, res) => {
         success: true,
         email: user.email,
         role: user.role,
-        sucursal: user.sucursal,
+        sucursal_id: user.sucursal_id,
+        restaurante_id: user.restaurante_id,
+        usuario_id: user.usuario_id,
+        nombre: user.nombre,
+        apellidos: user.apellidos,
         token: token
       });
 
     } catch (error) {
       // si ocurre algun error vamos a capturarlo
-
       console.error(`Error durante el proceso del login. -- ERROR: ${error}`);
-      res.status(500).json({succes: false, message: 'Error interno del servidor'});
+      
+      // Manejar errores específicos de base de datos
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        return res.status(503).json({
+          success: false, 
+          error: 'Servicio temporalmente no disponible. Por favor, intenta más tarde.'
+        });
+      }
+      
+      if (error.code === '28P01') {
+        return res.status(500).json({
+          success: false, 
+          error: 'Error de configuración del servidor. Contacta al administrador.'
+        });
+      }
+      
+      res.status(500).json({
+        success: false, 
+        error: 'Error interno del servidor. Por favor, intenta más tarde.'
+      });
     }
 });
 
@@ -234,39 +285,71 @@ app.post('/api/register-restaurantero', async (req, res) =>{
     const usuarioResult = await client.query(insertUsuarioQuery, usuarioValues);
     const nuevoUsuarioId = usuarioResult.rows[0].usuario_id; // Puedes usar este ID si lo necesitas
 
-    await client.query('COMMIT');
+         await client.query('COMMIT');
 
-    // Responder al frontend con éxito
-    // NOTA: Aquí es donde idealmente se activaría el envío del email de verificación
-    // con el pin al emailContactoLegal.
-    console.log(`Restaurante "${nombreRestaurante}" (${nuevoRestauranteId}) y Administrador "${emailContactoLegal}" (${nuevoUsuarioId}) registrados con éxito. Pin de verificación: ${verificationCode}`); // Loggear pin en desarrollo (QUITAR EN PRODUCCIÓN!)
+     // Enviar email de verificación
+     try {
+       const emailSent = await sendVerificationEmail(emailContactoLegal, verificationCode, nombreContactoLegal);
+       if (emailSent) {
+         console.log(`Email de verificación enviado exitosamente a ${emailContactoLegal}`);
+       } else {
+         console.warn(`No se pudo enviar email de verificación a ${emailContactoLegal}`);
+       }
+     } catch (emailError) {
+       console.error('Error enviando email de verificación:', emailError);
+       // No fallar el registro por error de email
+     }
 
-    res.status(201).json({
-      success: true,
-      message: 'Restaurante y usuario administrador registrado con exito. Por favor, verifique su correo electrónico con el pin enviado',
-      restauranteID: nuevoRestauranteId,
-      usuarioId: nuevoUsuarioId
-    })
+     console.log(`Restaurante "${nombreRestaurante}" (${nuevoRestauranteId}) y Administrador "${emailContactoLegal}" (${nuevoUsuarioId}) registrados con éxito. Pin de verificación: ${verificationCode}`);
+
+     res.status(201).json({
+       success: true,
+       message: 'Restaurante y usuario administrador registrado con éxito. Se ha enviado un código de verificación a tu email.',
+       restauranteID: nuevoRestauranteId,
+       usuarioId: nuevoUsuarioId
+     })
 
  
-  } catch (error) {
-    //hacemos rollback si hay agun error
-    if (client){
-      await client.query('ROLLBACK');
-    }
-    console.error(`Error durante el registro del restaurante -- ERROR: ${error}`);
+     } catch (error) {
+     //hacemos rollback si hay agun error
+     if (client){
+       await client.query('ROLLBACK');
+     }
+     console.error(`Error durante el registro del restaurante -- ERROR: ${error}`);
 
-    //manejar error de duplicidad de email
-    if (error.code === '23505'){
-      return res.status(409).json({success: false, error: 'Error interno del servidor durante el registro'});
-    }
+     //manejar errores específicos
+     if (error.code === '23505'){
+       return res.status(409).json({
+         success: false, 
+         error: 'Ya existe una cuenta con este email. Por favor, usa otro email o inicia sesión.'
+       });
+     }
+     
+     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+       return res.status(503).json({
+         success: false, 
+         error: 'Servicio temporalmente no disponible. Por favor, intenta más tarde.'
+       });
+     }
+     
+     if (error.code === '28P01') {
+       return res.status(500).json({
+         success: false, 
+         error: 'Error de configuración del servidor. Contacta al administrador.'
+       });
+     }
+     
+     return res.status(500).json({
+       success: false, 
+       error: 'Error interno del servidor durante el registro. Por favor, intenta más tarde.'
+     });
 
-  }finally{
-    //liberar al cliente de Db
-    if (client){
-      client.release();
-    }
-  }
+   }finally{
+     //liberar al cliente de Db
+     if (client){
+       client.release();
+     }
+   }
 });
 
 
@@ -280,38 +363,59 @@ function guardarPedidos(pedidos) {
   fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidos, null, 2), 'utf-8');
 }*/
 
-// -- Endpoint para obtener los pedidos filtrados por sucursal
+// -- Endpoint para obtener los pedidos filtrados por sucursal (usando UUID)
 
-app.get('/api/pedidos/sucursal/:sucursal', verifyToken, async (req, res)=>{
-    //obtenemos el valor del del parametro ':sucursal' de la URL
-    const sucursalSolicitada = req.params.sucursal; // Renombramos para mayor claridad
+app.get('/api/pedidos/sucursal/:sucursal_id', verifyToken, async (req, res)=>{
+    //obtenemos el valor del parametro ':sucursal_id' de la URL (ahora es un UUID)
+    const sucursalId = req.params.sucursal_id; // Renombramos para mayor claridad
 
     // **** Lógica de Autorización: Verificar acceso basado en rol y sucursal ****
     const usuarioAutenticado = req.user; // Info del usuario del token
 
-    // 1. Si no hay usuario o no tiene rol/sucursal, denegar acceso (aunque verifyToken ya lo haría, es buena práctica)
+    // 1. Si no hay usuario o no tiene rol, denegar acceso
     if (!usuarioAutenticado || !usuarioAutenticado.role) {
          return res.status(403).json({ success: false, message: 'Acceso denegado: Información de usuario incompleta en el token.' });
     }
 
     // 2. Permitir acceso total a administradores
     if (usuarioAutenticado.role === 'admin') {
-        // Los administradores pueden acceder a cualquier sucursal.
-        // Continuar con la consulta usando la sucursal solicitada en la URL.
-        console.log(`Admin ${usuarioAutenticado.email} accediendo a pedidos de sucursal ${sucursalSolicitada}`);
-    } else if (usuarioAutenticado.role === 'empleado' || usuarioAutenticado.role === 'gerente') { // O cualquier otro rol no admin
+        // Los administradores pueden acceder a cualquier sucursal de su restaurante.
+        // Verificar que la sucursal pertenece al restaurante del admin
+        try {
+            const sucursalCheckQuery = `
+                SELECT sucursal_id FROM sucursales 
+                WHERE sucursal_id = $1 AND restaurante_id = $2 AND is_active = true
+            `;
+            const sucursalCheckResult = await db.query(sucursalCheckQuery, [sucursalId, usuarioAutenticado.restaurante_id]);
+
+            if (sucursalCheckResult.rowCount === 0) {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Acceso denegado: Sucursal no encontrada o no pertenece a su restaurante' 
+                });
+            }
+        } catch (error) {
+            console.error('Error al verificar sucursal:', error);
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Error interno del servidor durante la verificación' 
+            });
+        }
+        
+        console.log(`Admin ${usuarioAutenticado.email} accediendo a pedidos de sucursal ${sucursalId}`);
+    } else if (usuarioAutenticado.role === 'empleado' || usuarioAutenticado.role === 'gerente') {
         // 3. Restringir a usuarios no admin a su sucursal asignada
-        if (!usuarioAutenticado.sucursal) {
+        if (!usuarioAutenticado.sucursal_id) {
              return res.status(403).json({ success: false, message: 'Acceso denegado: Su usuario no tiene una sucursal asignada.' });
         }
 
-        if (usuarioAutenticado.sucursal !== sucursalSolicitada) {
+        if (usuarioAutenticado.sucursal_id !== sucursalId) {
             // Si el usuario intenta acceder a una sucursal que no es la suya
-            console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó acceder a pedidos de sucursal ${sucursalSolicitada} (Su sucursal es ${usuarioAutenticado.sucursal})`);
-            return res.status(403).json({ success: false, message: `Acceso denegado: Solo puede acceder a pedidos de sucursal ${usuarioAutenticado.sucursal}.` });
+            console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó acceder a pedidos de sucursal ${sucursalId} (Su sucursal es ${usuarioAutenticado.sucursal_id})`);
+            return res.status(403).json({ success: false, message: `Acceso denegado: Solo puede acceder a pedidos de su sucursal asignada.` });
         }
         // Si es su propia sucursal, permitir acceso.
-         console.log(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) accediendo a pedidos de sucursal ${sucursalSolicitada}`);
+         console.log(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) accediendo a pedidos de sucursal ${sucursalId}`);
 
     } else {
          // Si tiene otro rol no definido, denegar acceso por defecto
@@ -319,19 +423,10 @@ app.get('/api/pedidos/sucursal/:sucursal', verifyToken, async (req, res)=>{
     }
     // **************************************************************************
 
-
-    // paso de validacion para asegurarnos  que se proporciono el nombre de la sucursal
-    // Esta validación es útil si el admin pudiera omitir la sucursal, pero con el parámetro obligatorio, ya está cubierta por express.
-    // if (!sucursalSolicitada) return res.status(400).json({ success: false, error: `Se requiere especificar la sucursal para obtener los pedidos`});
-
     try {
-      // consulta SQL para obtener pedidos filtrador por Sucursal
-      // seleccionamos todas las columnas ("*") de la tabla 'pedidos'
-      // ordena los resultados por la columna 'time' de forma DESCENDENTE - ESC
-
-      const queryText = 'SELECT * FROM pedidos WHERE sucursal = $1 ORDER BY hora DESC';
-      //usamos placeholder
-      const values = [sucursalSolicitada];
+      // consulta SQL para obtener pedidos filtrados por sucursal_id (UUID)
+      const queryText = 'SELECT * FROM pedidos WHERE sucursal_id = $1 ORDER BY hora DESC';
+      const values = [sucursalId];
 
       const result = await db.query(queryText, values);
 
@@ -340,7 +435,7 @@ app.get('/api/pedidos/sucursal/:sucursal', verifyToken, async (req, res)=>{
       res.json(pedidosFiltrados)
 
     } catch (error) {
-      console.error(`Error al obtener los pedidos de la sucursal ${sucursalSolicitada} de la BD -- ERROR: ${error}`);
+      console.error(`Error al obtener los pedidos de la sucursal ${sucursalId} de la BD -- ERROR: ${error}`);
       res.status(500).json({success: false, error: 'Error interno del servidor al obtener los pedidos por sucursal'});
     }    
 
@@ -384,32 +479,45 @@ app.post('/api/pedidos/:codigo/estado', verifyToken, async (req, res) =>{
 
     // 2. Obtener la sucursal del pedido que se intenta actualizar
     try {
-        const pedidoResult = await db.query('SELECT sucursal FROM pedidos WHERE codigo = $1', [codigoPedido]);
+        const pedidoResult = await db.query('SELECT sucursal_id FROM pedidos WHERE codigo = $1', [codigoPedido]);
 
         if (pedidoResult.rowCount === 0) {
              // Si el pedido no existe, responde con 404 (no es un error de autorización per se, sino de recurso no encontrado)
             return res.status(404).json({ success: false, error: `Pedido con código ${codigoPedido} no encontrado en la BD.` });
         }
 
-        const sucursalDelPedido = pedidoResult.rows[0].sucursal;
+        const sucursalDelPedido = pedidoResult.rows[0].sucursal_id;
 
         // 3. Verificar permisos basados en rol y sucursal
         if (usuarioAutenticado.role !== 'admin') {
             // Si el usuario NO es administrador, debe ser un usuario con sucursal asignada y debe coincidir con la sucursal del pedido
-            if (!usuarioAutenticado.sucursal) {
+            if (!usuarioAutenticado.sucursal_id) {
                 return res.status(403).json({ success: false, message: 'Acceso denegado: Su usuario no tiene una sucursal asignada.' });
             }
 
-            if (usuarioAutenticado.sucursal !== sucursalDelPedido) {
+            if (usuarioAutenticado.sucursal_id !== sucursalDelPedido) {
                 // Si el usuario intenta actualizar un pedido de otra sucursal
-                 console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó actualizar estado de pedido ${codigoPedido} (sucursal ${sucursalDelPedido}) desde sucursal ${usuarioAutenticado.sucursal}`);
-                 return res.status(403).json({ success: false, message: `Acceso denegado: No tiene permiso para actualizar pedidos de sucursal ${sucursalDelPedido}.` });
+                 console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó actualizar estado de pedido ${codigoPedido} (sucursal ${sucursalDelPedido}) desde sucursal ${usuarioAutenticado.sucursal_id}`);
+                 return res.status(403).json({ success: false, message: `Acceso denegado: No tiene permiso para actualizar pedidos de otra sucursal.` });
             }
              // Si es su propia sucursal, permitir continuar (después de esta comprobación)
              console.log(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) actualizando estado de pedido ${codigoPedido} de sucursal ${sucursalDelPedido}`);
 
         } else {
-            // Si es administrador, permitir actualizar cualquier pedido
+            // Si es administrador, permitir actualizar cualquier pedido de su restaurante
+            // Verificar que la sucursal del pedido pertenece al restaurante del admin
+            const sucursalCheckQuery = `
+                SELECT sucursal_id FROM sucursales 
+                WHERE sucursal_id = $1 AND restaurante_id = $2 AND is_active = true
+            `;
+            const sucursalCheckResult = await db.query(sucursalCheckQuery, [sucursalDelPedido, usuarioAutenticado.restaurante_id]);
+
+            if (sucursalCheckResult.rowCount === 0) {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Acceso denegado: No tiene permiso para actualizar pedidos de sucursales que no pertenecen a su restaurante' 
+                });
+            }
              console.log(`Admin ${usuarioAutenticado.email} actualizando estado de pedido ${codigoPedido} de sucursal ${sucursalDelPedido}`);
         }
 
@@ -503,10 +611,64 @@ app.post('/api/pedidos/:codigo/estado', verifyToken, async (req, res) =>{
 
 
 // --- FALTA COMPROBAR DEL ENVIO DESDE EL SERVIDOR DE WHATSAPP QUE SEA ACORDE A COMO SE RECIBEN AQUI LOS PARAMETROS EN pedidoParaDB
-// -- Endpoint para meter nuevos pedidos 
-app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
-    const { sucursal } = req.params; //Obtenemos la sucursal de la URL
+// -- Endpoint para meter nuevos pedidos (usando UUID)
+app.post('/api/pedidos/:sucursal_id', verifyToken, async (req, res) =>{
+    const { sucursal_id } = req.params; //Obtenemos la sucursal_id de la URL (ahora es un UUID)
     const datosEntrada = req.body; //Obtenemos los datos entrantes
+
+    // **** Lógica de Autorización: Verificar acceso basado en rol y sucursal ****
+    const usuarioAutenticado = req.user;
+
+    // 1. Si no hay usuario o no tiene rol, denegar acceso
+    if (!usuarioAutenticado || !usuarioAutenticado.role) {
+         return res.status(403).json({ success: false, message: 'Acceso denegado: Información de usuario incompleta en el token.' });
+    }
+
+    // 2. Permitir acceso total a administradores
+    if (usuarioAutenticado.role === 'admin') {
+        // Los administradores pueden crear pedidos en cualquier sucursal de su restaurante.
+        // Verificar que la sucursal pertenece al restaurante del admin
+        try {
+            const sucursalCheckQuery = `
+                SELECT sucursal_id FROM sucursales 
+                WHERE sucursal_id = $1 AND restaurante_id = $2 AND is_active = true
+            `;
+            const sucursalCheckResult = await db.query(sucursalCheckQuery, [sucursal_id, usuarioAutenticado.restaurante_id]);
+
+            if (sucursalCheckResult.rowCount === 0) {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Acceso denegado: Sucursal no encontrada o no pertenece a su restaurante' 
+                });
+            }
+        } catch (error) {
+            console.error('Error al verificar sucursal:', error);
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Error interno del servidor durante la verificación' 
+            });
+        }
+        
+        console.log(`Admin ${usuarioAutenticado.email} creando pedido en sucursal ${sucursal_id}`);
+    } else if (usuarioAutenticado.role === 'empleado' || usuarioAutenticado.role === 'gerente') {
+        // 3. Restringir a usuarios no admin a su sucursal asignada
+        if (!usuarioAutenticado.sucursal_id) {
+             return res.status(403).json({ success: false, message: 'Acceso denegado: Su usuario no tiene una sucursal asignada.' });
+        }
+
+        if (usuarioAutenticado.sucursal_id !== sucursal_id) {
+            // Si el usuario intenta crear un pedido en otra sucursal
+            console.warn(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) intentó crear pedido en sucursal ${sucursal_id} (Su sucursal es ${usuarioAutenticado.sucursal_id})`);
+            return res.status(403).json({ success: false, message: `Acceso denegado: Solo puede crear pedidos en su sucursal asignada.` });
+        }
+        // Si es su propia sucursal, permitir acceso.
+         console.log(`Usuario ${usuarioAutenticado.email} (${usuarioAutenticado.role}) creando pedido en sucursal ${sucursal_id}`);
+
+    } else {
+         // Si tiene otro rol no definido, denegar acceso por defecto
+        return res.status(403).json({ success: false, message: `Acceso denegado: Rol de usuario desconocido (${usuarioAutenticado.role}).` });
+    }
+    // **************************************************************************
 
     // -- logica de Normalización y Mapeo (Ajustado para ambos tipos de pedidos (recoger o domicilio) )
     
@@ -519,7 +681,7 @@ app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
       estado: datosEntrada.estado || 'Pendiente', //Estado 'Pendiente' por default
       nombre: datosEntrada.name,
       celular: datosEntrada.numero,
-      sucursal: sucursal,
+      sucursal_id: sucursal_id, // Ahora usamos sucursal_id (UUID)
       pedido: datosEntrada.productDetails,
       instrucciones: datosEntrada.specs,
       entregar_a: tipoPedido === 'recoger' ? datosEntrada.deliverTo: datosEntrada.name,
@@ -529,7 +691,7 @@ app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
       pago: tipoPedido === 'domicilio' ? datosEntrada.payMethod : null,
       // Generemos fecha y hora a partir de la hora mexicana 'America/Mexico_City'
       fecha: new Date().toLocaleDateString('es-MX', {timeZone: 'America/Mexico_City'}).split('/').reverse().join('-'),
-      hora: new Date().toLocaleTimeString('es-MX', {timeZone: 'America/Mexico_City', hour12: false}), //se guarda en formato 24 horas (PREGUNTAR A DANI SI HAY PROBLEMA CON ESTO)
+      hora: new Date().toLocaleTimeString('es-MX', {timeZone: 'America/Mexico_City', hour12: false}), //se guarda en formato 24 horas
       tiempo: datosEntrada.tiempo ? datosEntrada.tiempo: '' 
     };
 
@@ -538,10 +700,10 @@ app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
       return res.status(400).json({success: false, error: `El formato de 'productDetails' debe ser un string`});
     }
 
-    if (!pedidoParaDB.codigo || !pedidoParaDB.deliver_or_rest || !pedidoParaDB.estado || !pedidoParaDB.nombre || !pedidoParaDB.celular || !pedidoParaDB.sucursal || !pedidoParaDB.pedido || !pedidoParaDB.total || !pedidoParaDB.currency || pedidoParaDB.pago === undefined || !pedidoParaDB.fecha || !pedidoParaDB.hora || pedidoParaDB.entregar_a === undefined) { // Validar campos clave
+    if (!pedidoParaDB.codigo || !pedidoParaDB.deliver_or_rest || !pedidoParaDB.estado || !pedidoParaDB.nombre || !pedidoParaDB.celular || !pedidoParaDB.sucursal_id || !pedidoParaDB.pedido || !pedidoParaDB.total || !pedidoParaDB.currency || pedidoParaDB.pago === undefined || !pedidoParaDB.fecha || !pedidoParaDB.hora || pedidoParaDB.entregar_a === undefined) { // Validar campos clave
       console.error('Intento de crear pedido con datos faltantes (despues de mapeo):', pedidoParaDB);
       console.error('Datos recibidos:', datosEntrada);
-      return res.status(400).json({ success: false, error: 'Faltan datos requeridos para crear el pedido (codigo, deliver_or_rest, estado, nombre, celular, sucursal, pedido, total, currency, pago, fecha, hora, entregar_a son minimos).' });
+      return res.status(400).json({ success: false, error: 'Faltan datos requeridos para crear el pedido (codigo, deliver_or_rest, estado, nombre, celular, sucursal_id, pedido, total, currency, pago, fecha, hora, entregar_a son minimos).' });
   }
   
     if (tipoPedido === 'domicilio' && !pedidoParaDB.domicilio) {
@@ -558,7 +720,7 @@ app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
 
     const queryText = `
       INSERT INTO pedidos (
-        codigo, deliver_or_rest, estado, nombre, celular, sucursal,
+        codigo, deliver_or_rest, estado, nombre, celular, sucursal_id,
         pedido, instrucciones, entregar_a, domicilio, total, currency,
         pago, fecha, hora, tiempo
       )
@@ -572,7 +734,7 @@ app.post('/api/pedidos/:sucursal', verifyToken, async (req, res) =>{
       pedidoParaDB.estado,
       pedidoParaDB.nombre,
       pedidoParaDB.celular,
-      pedidoParaDB.sucursal,
+      pedidoParaDB.sucursal_id,
       pedidoParaDB.pedido,
       pedidoParaDB.instrucciones,
       pedidoParaDB.entregar_a,
@@ -681,7 +843,7 @@ app.get('/api/obtenerPedidos', async (req, res) => {
 })*/
 
 app.delete('/api/pedidos/:codigo', verifyToken, async (req, res) => {
-  //obtiene el valro del parametro :codigo de la URL
+  //obtiene el valor del parametro :codigo de la URL
   const codigoPedido = req.params.codigo;
 
   //Lógica de Autorización: Solo permitir eliminar a roles autorizados
@@ -695,7 +857,30 @@ app.delete('/api/pedidos/:codigo', verifyToken, async (req, res) => {
   }
 
   if (!codigoPedido) return res.status(400).json({success: false, error: 'Se requiere un pedido para eliminar'});
+  
   try {
+    // Verificar que el pedido pertenece al restaurante del usuario (para admins)
+    if (usuarioAutenticado.role === 'admin') {
+      const pedidoCheckQuery = `
+        SELECT p.pedido_id, p.codigo, s.restaurante_id 
+        FROM pedidos p 
+        JOIN sucursales s ON p.sucursal_id = s.sucursal_id 
+        WHERE p.codigo = $1
+      `;
+      const pedidoCheckResult = await db.query(pedidoCheckQuery, [codigoPedido]);
+
+      if (pedidoCheckResult.rowCount === 0) {
+        return res.status(404).json({success: false, error: `Pedido con código ${codigoPedido} no encontrado`});
+      }
+
+      const pedido = pedidoCheckResult.rows[0];
+      if (pedido.restaurante_id !== usuarioAutenticado.restaurante_id) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Acceso denegado: No puede eliminar pedidos de otros restaurantes' 
+        });
+      }
+    }
 
     //consulta SQL para eliminar un pedido específico
     const queryText = 'DELETE FROM pedidos WHERE codigo = $1';
@@ -706,11 +891,11 @@ app.delete('/api/pedidos/:codigo', verifyToken, async (req, res) => {
 
     if (result.rowCount > 0) {
       // si se eliminó al menos una fila
-      console.log(`Pedido con codigo ${codigoPedido} elimiando con éxito de la BD`);
+      console.log(`Pedido con codigo ${codigoPedido} eliminado con éxito de la BD`);
       res.json({success: true, mensaje: `Pedido con codigo ${codigoPedido} eliminado con éxito`});
     } else {
-      //Si rowCount es 0 ningu pedido con ese codigo fue elimiando
-      res.status(404).json({success: false, error: `Pedido con codigo ${codigoPedido} no encontrado para eliminar`});
+      //Si rowCount es 0 ningún pedido con ese codigo fue eliminado
+      res.status(404).json({success: false, error: `Pedido con código ${codigoPedido} no encontrado para eliminar`});
     }
 
   } catch (error) {
@@ -838,15 +1023,28 @@ app.get('/api/corte', async (req, res) => {
   }
 });;
 
-// -- Endpoint para obtener todos los pedidos (como lo haría el rol "admin")
+// -- Endpoint para obtener todos los pedidos del restaurante del usuario autenticado
 app.get('/api/pedidos.json', verifyToken, async (req, res) => {
   if (!req.user || req.user.role !== 'admin'){
-    console.warn(`El usuario ${req.user} está intentando acceder a funciones de administrador. REVISAR LA SEGURIDAD DEL ENDPOINT`);
+    console.warn(`El usuario ${req.user.email} está intentando acceder a funciones de administrador. REVISAR LA SEGURIDAD DEL ENDPOINT`);
     return res.status(403).json({success: false, error: 'Acceso denegado: No cuentas con los permisos necesarios para acceder a esta función'});
   }
+  
+  if (!req.user.restaurante_id) {
+    return res.status(403).json({success: false, error: 'Acceso denegado: Usuario sin restaurante asignado'});
+  }
+  
   try {
-    //vamos a ejecutar una consulta SQL para obtener todos los pedidos ordenados por hora descendente
-    const result = await db.query('SELECT * FROM pedidos ORDER BY hora DESC');
+    // Consulta SQL para obtener todos los pedidos del restaurante del usuario, ordenados por hora descendente
+    const queryText = `
+      SELECT p.*, s.nombre_sucursal 
+      FROM pedidos p 
+      JOIN sucursales s ON p.sucursal_id = s.sucursal_id 
+      WHERE s.restaurante_id = $1 
+      ORDER BY p.hora DESC
+    `;
+    
+    const result = await db.query(queryText, [req.user.restaurante_id]);
 
     const pedidos = result.rows; //'result.rows' contiene el array de pedidos (resultados)
     res.json(pedidos);
