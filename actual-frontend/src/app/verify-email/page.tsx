@@ -1,65 +1,106 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Mail, ArrowRight, RefreshCw } from "lucide-react"
+import { Mail, CheckCircle, AlertCircle, Loader2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { apiClient } from "@/lib/api"
 
 export default function VerifyEmailPage() {
-  const [code, setCode] = useState(["", "", "", "", "", ""])
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const email = searchParams.get('email')
+  
+  const [verificationCode, setVerificationCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isResending, setIsResending] = useState(false)
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  const [isVerified, setIsVerified] = useState(false)
 
-  const handleInputChange = (index: number, value: string) => {
-    if (value.length > 1) return // Solo un dígito por input
-
-    const newCode = [...code]
-    newCode[index] = value
-    setCode(newCode)
-
-    // Auto-focus al siguiente input
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus()
+  useEffect(() => {
+    if (!email) {
+      router.push('/signup')
     }
-  }
+  }, [email, router])
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleVerifyEmail = async (e: React.FormEvent) => {
     e.preventDefault()
-    const verificationCode = code.join("")
-
-    if (verificationCode.length !== 6) return
+    if (!verificationCode.trim()) {
+      setError("Por favor ingresa el código de verificación")
+      return
+    }
 
     setIsLoading(true)
+    setError("")
 
-    // Simular verificación
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/verify-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          verificationCode: verificationCode.trim()
+        }),
+      })
 
-    console.log("Verification code:", verificationCode)
-    setIsLoading(false)
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccess(data.message)
+        setIsVerified(true)
+        setTimeout(() => {
+          router.push('/login')
+        }, 3000)
+      } else {
+        setError(data.error || 'Error al verificar el email')
+      }
+    } catch (error) {
+      console.error('Error verificando email:', error)
+      setError('Error de conexión. Por favor, intenta de nuevo.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleResendCode = async () => {
     setIsResending(true)
+    setError("")
 
-    // Simular reenvío
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/resend-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      })
 
-    setIsResending(false)
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccess('Nuevo código de verificación enviado a tu email')
+        setTimeout(() => setSuccess(""), 5000)
+      } else {
+        setError(data.error || 'Error al reenviar el código')
+      }
+    } catch (error) {
+      console.error('Error reenviando código:', error)
+      setError('Error de conexión. Por favor, intenta de nuevo.')
+    } finally {
+      setIsResending(false)
+    }
   }
 
-  useEffect(() => {
-    inputRefs.current[0]?.focus()
-  }, [])
+  if (!email) {
+    return null
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
@@ -70,6 +111,10 @@ export default function VerifyEmailPage() {
           className="absolute -bottom-40 -left-40 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-float"
           style={{ animationDelay: "2s" }}
         ></div>
+        <div
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-float"
+          style={{ animationDelay: "4s" }}
+        ></div>
       </div>
 
       <Card className="w-full max-w-md glass-strong relative z-10 animate-in fade-in-0 slide-in-from-bottom-4 duration-1000">
@@ -78,85 +123,113 @@ export default function VerifyEmailPage() {
             <Mail className="w-8 h-8 text-primary-foreground" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold text-foreground">Verifica tu correo</CardTitle>
-            <CardDescription className="text-base mt-2">
-              Hemos enviado un código de 6 dígitos a tu correo electrónico
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              Verificar Email
+            </CardTitle>
+            <CardDescription className="text-lg mt-2">
+              Ingresa el código enviado a tu email
             </CardDescription>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex justify-center gap-3">
-                {code.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleInputChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    className="w-12 h-12 text-center text-xl font-bold glass rounded-lg border-2 border-border focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300 focus:scale-110"
-                  />
-                ))}
-              </div>
+          {success && (
+            <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              {success}
+            </div>
+          )}
 
-              <p className="text-center text-sm text-muted-foreground">
-                Ingresa el código de verificación que recibiste
+          {error && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
+
+          {isVerified ? (
+            <div className="text-center py-8">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-green-700 mb-2">¡Email Verificado!</h3>
+              <p className="text-muted-foreground">
+                Serás redirigido al login en unos segundos...
               </p>
             </div>
+          ) : (
+            <>
+              <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  Código enviado a: <strong>{email}</strong>
+                </p>
+              </div>
 
-            <Button
-              type="submit"
-              disabled={isLoading || code.join("").length !== 6}
-              className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg disabled:opacity-50"
-              size="lg"
-            >
-              {isLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Verificando...
-                </>
-              ) : (
-                <>
-                  Verificar y Continuar
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </>
-              )}
-            </Button>
-          </form>
+              <form onSubmit={handleVerifyEmail} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="verificationCode">
+                    Código de Verificación
+                  </Label>
+                  <Input
+                    id="verificationCode"
+                    type="text"
+                    placeholder="123456"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    className="glass transition-all duration-300 focus:scale-[1.02] text-center text-2xl font-mono tracking-widest"
+                    maxLength={6}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Ingresa el código de 6 dígitos enviado a tu email
+                  </p>
+                </div>
 
-          <div className="text-center space-y-4">
-            <div className="flex items-center justify-center space-x-2">
-              <span className="text-sm text-muted-foreground">¿No recibiste el código?</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleResendCode}
-                disabled={isResending}
-                className="text-primary hover:text-primary/80 p-0 h-auto font-medium"
-              >
-                {isResending ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                    Reenviando...
-                  </>
-                ) : (
-                  "Reenviar código"
-                )}
-              </Button>
-            </div>
+                <Button
+                  type="submit"
+                  className="w-full glass transition-all duration-300 hover:scale-[1.02]"
+                  disabled={isLoading || !verificationCode.trim()}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verificando...
+                    </>
+                  ) : (
+                    "Verificar Email"
+                  )}
+                </Button>
+              </form>
 
-            <div className="pt-4 border-t border-border/50">
-              <Link href="/signup" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                ← Volver al registro
-              </Link>
-            </div>
-          </div>
+              <div className="text-center space-y-4">
+                <Button
+                  variant="ghost"
+                  onClick={handleResendCode}
+                  disabled={isResending}
+                  className="text-sm"
+                >
+                  {isResending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    "Reenviar Código"
+                  )}
+                </Button>
+
+                <div className="text-sm text-muted-foreground">
+                  ¿No recibiste el código? Revisa tu carpeta de spam
+                </div>
+
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver al registro
+                </Link>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,8 @@
 import type React from "react"
 import { Inter, Poppins } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -18,7 +20,7 @@ const poppins = Poppins({
 export const metadata = {
   title: "cEats v2 - Sistema de Gestión de Restaurantes",
   description: "Plataforma profesional para la gestión integral de restaurantes",
-    generator: 'v0.app'
+  generator: 'v0.app'
 }
 
 export default function RootLayout({
@@ -31,7 +33,18 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">{children}</body>
+      <body className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

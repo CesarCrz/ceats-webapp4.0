@@ -14,6 +14,7 @@ import { CountrySelector } from "@/components/country-selector"
 
 export default function SignupPage() {
   const [currentStep, setCurrentStep] = useState(1)
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     // Datos del administrador
     nombre: "",
@@ -57,12 +58,54 @@ export default function SignupPage() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (isStep2Valid()) {
-      console.log("Datos del formulario:", formData)
-      // Aquí iría la lógica de registro y redirección a /verify-email
-      window.location.href = "/verify-email"
+      try {
+        // Preparar datos para el backend
+        const backendData = {
+          nombreRestaurante: formData.nombreRestaurante,
+          nombreContactoLegal: formData.nombre,
+          apellidosContactoLegal: formData.apellidos,
+          emailContactoLegal: formData.email,
+          password: formData.password,
+          telefonoContactoLegal: formData.countryCode + formData.telefono, // Agregar código de país
+          direccionFiscal: formData.direccionFiscal,
+          fechaNacimientoContactoLegal: formData.fechaNacimiento
+        }
+
+        // Enviar registro al backend
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/register-restaurantero`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(backendData),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          // Redirigir a verificación con email
+          window.location.href = `/verify-email?email=${encodeURIComponent(formData.email)}`
+        } else {
+          console.error('Error en registro:', data.error)
+          setError(data.error || 'Error en el registro')
+        }
+      } catch (error: any) {
+        console.error('Error enviando registro:', error)
+        
+        // Manejar errores específicos
+        if (error.message?.includes('Failed to fetch')) {
+          setError('No se puede conectar con el servidor. Verifica tu conexión a internet.')
+        } else if (error.status === 503) {
+          setError('Servicio temporalmente no disponible. Por favor, intenta más tarde.')
+        } else if (error.status === 500) {
+          setError('Error interno del servidor. Por favor, intenta más tarde.')
+        } else {
+          setError('Error de conexión. Por favor, intenta de nuevo.')
+        }
+      }
     }
   }
 
@@ -136,6 +179,11 @@ export default function SignupPage() {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {error && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit}>
             {currentStep === 1 && (
               <div className="space-y-6 animate-in fade-in-0 slide-in-from-right-4 duration-500">

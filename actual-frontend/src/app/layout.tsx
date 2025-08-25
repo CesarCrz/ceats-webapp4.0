@@ -1,6 +1,7 @@
 import type React from "react"
 import { Inter, Poppins } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,7 +31,11 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">{children}</body>
+      <body className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,9 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/context/AuthContext"
+import { apiClient } from "@/lib/api"
+import { Pedido } from "@/lib/api"
 
 const mockOrderItems = [
   { name: "Sushi Mar y Tierra", quantity: 2, price: 218 },
@@ -31,10 +34,44 @@ const mockOrderItems = [
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { user, logout, isAuthenticated } = useAuth()
+  const [pedidos, setPedidos] = useState<Pedido[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login')
+      return
+    }
+
+    const loadPedidos = async () => {
+      try {
+        setIsLoading(true)
+        let pedidosData: Pedido[]
+        
+        if (user?.role === 'admin') {
+          // Admin ve todos los pedidos del restaurante
+          pedidosData = await apiClient.getAllPedidos()
+        } else if (user?.sucursal_id) {
+          // Usuario de sucursal ve solo sus pedidos
+          pedidosData = await apiClient.getPedidosSucursal(user.sucursal_id)
+        } else {
+          pedidosData = []
+        }
+        
+        setPedidos(pedidosData)
+      } catch (error) {
+        console.error('Error loading pedidos:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadPedidos()
+  }, [isAuthenticated, user, router])
 
   const handleLogout = () => {
-    localStorage.removeItem("authToken")
-    sessionStorage.clear()
+    logout()
     router.push("/login")
   }
 
@@ -167,8 +204,10 @@ export default function DashboardPage() {
                 <ChefHat className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">🍽️ Soru Restaurant - Administrador</h1>
-                <p className="text-xs text-white/80">Sistema de Gestión cEats v2</p>
+                <h1 className="text-xl font-bold text-white">🍽️ {user?.restaurante_id ? 'Restaurante' : 'Sistema'} - {user?.role || 'Usuario'}</h1>
+                <p className="text-xs text-white/80">
+                  {user ? `${user.nombre} ${user.apellidos}` : 'Sistema de Gestión cEats v2'}
+                </p>
               </div>
             </div>
 
@@ -280,7 +319,57 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Nuevos Pedidos */}
+            <div>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                  <Package className="w-3 h-3 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">🆕 Nuevos</h3>
+                <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 border-blue-500/20">
+                  {isLoading ? '...' : pedidos.filter(p => p.estado === 'Pendiente').length}
+                </Badge>
+              </div>
+
+              <div className="space-y-4">
+                {isLoading ? (
+                  <Card className="glass-strong p-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Cargando...</p>
+                  </Card>
+                ) : pedidos.filter(p => p.estado === 'Pendiente').length === 0 ? (
+                  <Card className="glass-strong p-8 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-muted/20 rounded-full flex items-center justify-center">
+                      <Package className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground">No hay nuevos pedidos</p>
+                    <p className="text-sm text-muted-foreground mt-1">Los nuevos pedidos aparecerán aquí</p>
+                  </Card>
+                ) : (
+                  pedidos
+                    .filter(p => p.estado === 'Pendiente')
+                    .map((pedido) => (
+                      <Card key={pedido.pedido_id} className="glass-strong p-4 cursor-pointer hover:scale-[1.02] transition-transform border-blue-200">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-semibold">{pedido.nombre}</h3>
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800">Nuevo</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Pedido: {pedido.codigo} • {pedido.deliver_or_rest}
+                        </p>
+                        <p className="text-sm font-medium">Total: ${pedido.total} {pedido.currency}</p>
+                        {pedido.instrucciones && (
+                          <p className="text-xs text-muted-foreground mt-2 italic">
+                            "{pedido.instrucciones}"
+                          </p>
+                        )}
+                      </Card>
+                    ))
+                )}
+              </div>
+            </div>
+
             {/* En Preparación */}
             <div>
               <div className="flex items-center space-x-3 mb-4">
@@ -289,12 +378,17 @@ export default function DashboardPage() {
                 </div>
                 <h3 className="text-lg font-semibold text-foreground">🔄 En Preparación</h3>
                 <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/20">
-                  {preparingOrders.length}
+                  {isLoading ? '...' : pedidos.filter(p => p.estado === 'Preparando').length}
                 </Badge>
               </div>
 
               <div className="space-y-4">
-                {preparingOrders.length === 0 ? (
+                {isLoading ? (
+                  <Card className="glass-strong p-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Cargando...</p>
+                  </Card>
+                ) : pedidos.filter(p => p.estado === 'Preparando').length === 0 ? (
                   <Card className="glass-strong p-8 text-center">
                     <div className="w-16 h-16 mx-auto mb-4 bg-muted/20 rounded-full flex items-center justify-center">
                       <Package className="w-8 h-8 text-muted-foreground" />
@@ -303,9 +397,25 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground mt-1">Los pedidos aceptados aparecerán aquí</p>
                   </Card>
                 ) : (
-                  preparingOrders.map((order) => (
-                    <OrderCard key={order.id} order={order} onClick={() => handleOrderClick(order)} />
-                  ))
+                  pedidos
+                    .filter(p => p.estado === 'Preparando')
+                    .map((pedido) => (
+                      <Card key={pedido.pedido_id} className="glass-strong p-4 cursor-pointer hover:scale-[1.02] transition-transform">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-semibold">{pedido.nombre}</h3>
+                          <Badge variant="outline">{pedido.estado}</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Pedido: {pedido.codigo} • {pedido.deliver_or_rest}
+                        </p>
+                        <p className="text-sm font-medium">Total: ${pedido.total} {pedido.currency}</p>
+                        {pedido.instrucciones && (
+                          <p className="text-xs text-muted-foreground mt-2 italic">
+                            "{pedido.instrucciones}"
+                          </p>
+                        )}
+                      </Card>
+                    ))
                 )}
               </div>
             </div>
@@ -318,12 +428,17 @@ export default function DashboardPage() {
                 </div>
                 <h3 className="text-lg font-semibold text-foreground">✅ Listo</h3>
                 <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-500/20">
-                  {readyOrders.length}
+                  {isLoading ? '...' : pedidos.filter(p => p.estado === 'Listo').length}
                 </Badge>
               </div>
 
               <div className="space-y-4">
-                {readyOrders.length === 0 ? (
+                {isLoading ? (
+                  <Card className="glass-strong p-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Cargando...</p>
+                  </Card>
+                ) : pedidos.filter(p => p.estado === 'Listo').length === 0 ? (
                   <Card className="glass-strong p-8 text-center">
                     <div className="w-16 h-16 mx-auto mb-4 bg-muted/20 rounded-full flex items-center justify-center">
                       <CheckCircle className="w-8 h-8 text-muted-foreground" />
@@ -332,9 +447,25 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground mt-1">Los pedidos completados aparecerán aquí</p>
                   </Card>
                 ) : (
-                  readyOrders.map((order) => (
-                    <OrderCard key={order.id} order={order} onClick={() => handleOrderClick(order)} />
-                  ))
+                  pedidos
+                    .filter(p => p.estado === 'Listo')
+                    .map((pedido) => (
+                      <Card key={pedido.pedido_id} className="glass-strong p-4 cursor-pointer hover:scale-[1.02] transition-transform">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-semibold">{pedido.nombre}</h3>
+                          <Badge variant="outline">{pedido.estado}</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Pedido: {pedido.codigo} • {pedido.deliver_or_rest}
+                        </p>
+                        <p className="text-sm font-medium">Total: ${pedido.total} {pedido.currency}</p>
+                        {pedido.instrucciones && (
+                          <p className="text-xs text-muted-foreground mt-2 italic">
+                            "{pedido.instrucciones}"
+                          </p>
+                        )}
+                      </Card>
+                    ))
                 )}
               </div>
             </div>
