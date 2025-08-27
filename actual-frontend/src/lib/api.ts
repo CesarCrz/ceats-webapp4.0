@@ -28,16 +28,41 @@ export interface Restaurante {
   updated_at: string;
 }
 
+// Interfaces para sucursales
 export interface Sucursal {
   sucursal_id: string;
   restaurante_id: string;
-  nombre_sucursal: string;
+  nombre: string;
   direccion: string;
   telefono: string;
-  horario: string;
+  email: string;
+  is_verified: boolean;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
+  usuarios_count: number;
+}
+
+export interface SucursalRegistro {
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+}
+
+export interface SucursalVerificacion {
+  sucursal_id: string;
+  verification_code: string;
+}
+
+export interface SucursalLoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface ChangePasswordData {
+  email: string;
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface Pedido {
@@ -221,3 +246,139 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
+
+// Métodos para sucursales
+export const sucursalesApi = {
+  // Obtener sucursales de un restaurante
+  async getSucursales(restauranteId: string): Promise<Sucursal[]> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/${restauranteId}`, {
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error obteniendo sucursales: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  // Registrar nueva sucursal
+  async registerSucursal(sucursalData: SucursalRegistro): Promise<{ success: boolean; message: string; sucursal: any }> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/register`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(sucursalData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Error registrando sucursal');
+    }
+
+    return data;
+  },
+
+  // Verificar código de sucursal
+  async verifySucursal(verificacionData: SucursalVerificacion): Promise<{ success: boolean; message: string; sucursal: any; usuario: any; tempPassword: string }> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/verify`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(verificacionData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Error verificando sucursal');
+    }
+
+    return data;
+  },
+
+  // Login de usuario de sucursal
+  async loginSucursal(credentials: SucursalLoginCredentials): Promise<{ success: boolean; message: string; token?: string; user?: any; requiresPasswordChange?: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Error en login de sucursal');
+    }
+
+    return data;
+  },
+
+  // Cambiar contraseña de usuario de sucursal
+  async changePassword(passwordData: ChangePasswordData): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(passwordData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Error cambiando contraseña');
+    }
+
+    return data;
+  },
+
+  // Actualizar sucursal
+  async updateSucursal(sucursalId: string, sucursalData: Partial<Sucursal>): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/${sucursalId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(sucursalData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Error actualizando sucursal');
+    }
+
+    return data;
+  },
+
+  // Eliminar sucursal
+  async deleteSucursal(sucursalId: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/api/sucursales/${sucursalId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Error eliminando sucursal');
+    }
+
+    return data;
+  },
+};

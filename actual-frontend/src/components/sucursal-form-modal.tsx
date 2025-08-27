@@ -8,53 +8,46 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { X, Building, Save } from "lucide-react"
-
-interface Sucursal {
-  id?: number
-  nombre: string
-  direccion: string
-  telefono: string
-  gerente: string
-  status: string
-}
+import { X, Building, Save, Mail } from "lucide-react"
+import { SucursalRegistro } from "@/lib/api"
 
 interface SucursalFormModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (sucursal: Sucursal) => void
-  sucursal?: Sucursal | null
-  gerentes: string[]
+  onSave: (sucursal: SucursalRegistro) => void
+  sucursal?: any | null
 }
 
-export function SucursalFormModal({ isOpen, onClose, onSave, sucursal, gerentes }: SucursalFormModalProps) {
-  const [formData, setFormData] = useState<Sucursal>({
+export function SucursalFormModal({ isOpen, onClose, onSave, sucursal }: SucursalFormModalProps) {
+  const [formData, setFormData] = useState<SucursalRegistro>({
     nombre: "",
     direccion: "",
     telefono: "",
-    gerente: "",
-    status: "activa",
+    email: "",
   })
 
   useEffect(() => {
     if (sucursal) {
-      setFormData(sucursal)
+      setFormData({
+        nombre: sucursal.nombre || "",
+        direccion: sucursal.direccion || "",
+        telefono: sucursal.telefono || "",
+        email: sucursal.email || "",
+      })
     } else {
       setFormData({
         nombre: "",
         direccion: "",
         telefono: "",
-        gerente: "",
-        status: "activa",
+        email: "",
       })
     }
   }, [sucursal, isOpen])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (formData.nombre && formData.direccion && formData.telefono && formData.gerente) {
+    if (formData.nombre && formData.direccion && formData.telefono && formData.email) {
       onSave(formData)
-      onClose()
     }
   }
 
@@ -63,10 +56,24 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal, gerentes 
       nombre: "",
       direccion: "",
       telefono: "",
-      gerente: "",
-      status: "activa",
+      email: "",
     })
     onClose()
+  }
+
+  const isValidEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  const isFormValid = () => {
+    return (
+      formData.nombre.trim() &&
+      formData.direccion.trim() &&
+      formData.telefono.trim() &&
+      formData.email.trim() &&
+      isValidEmail(formData.email)
+    )
   }
 
   return (
@@ -124,32 +131,22 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal, gerentes 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="gerente">Gerente asignado *</Label>
-            <Select value={formData.gerente} onValueChange={(value) => setFormData({ ...formData, gerente: value })}>
-              <SelectTrigger className="glass focus:glass-strong">
-                <SelectValue placeholder="Seleccionar gerente" />
-              </SelectTrigger>
-              <SelectContent className="glass-strong">
-                {gerentes.map((gerente) => (
-                  <SelectItem key={gerente} value={gerente}>
-                    {gerente}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="status">Estado</Label>
-            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-              <SelectTrigger className="glass focus:glass-strong">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="glass-strong">
-                <SelectItem value="activa">Activa</SelectItem>
-                <SelectItem value="inactiva">Inactiva</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="email" className="flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              Email de contacto *
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="sucursal@restaurante.com"
+              className="glass focus:glass-strong"
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Se enviará un código de verificación a este email para activar la sucursal
+            </p>
           </div>
 
           <div className="flex space-x-3 pt-4">
@@ -161,7 +158,11 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal, gerentes 
             >
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 cursor-pointer">
+            <Button 
+              type="submit" 
+              className="flex-1 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 cursor-pointer"
+              disabled={!isFormValid()}
+            >
               <Save className="w-4 h-4 mr-2" />
               {sucursal ? "Actualizar" : "Crear"}
             </Button>

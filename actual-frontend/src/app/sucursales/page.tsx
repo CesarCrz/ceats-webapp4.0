@@ -1,72 +1,52 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { SucursalFormModal } from "@/components/sucursal-form-modal"
+import { SucursalVerificationModal } from "@/components/sucursal-verification-modal"
 import { DeleteConfirmationModal } from "@/components/delete-confirmation-modal"
-import { Plus, Search, MapPin, Phone, Users, Edit, Trash2, ArrowLeft, Building } from "lucide-react"
+import { Plus, Search, MapPin, Phone, Users, Edit, Trash2, ArrowLeft, Building, Mail, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
-
-interface Sucursal {
-  id: number
-  nombre: string
-  direccion: string
-  telefono: string
-  usuarios: number
-  status: string
-  gerente: string
-}
+import { useAuth } from "@/context/AuthContext"
+import { sucursalesApi, Sucursal, SucursalRegistro } from "@/lib/api"
 
 export default function SucursalesPage() {
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
-  const [sucursales, setSucursales] = useState<Sucursal[]>([
-    {
-      id: 1,
-      nombre: "Sucursal Centro",
-      direccion: "Av. Juárez 123, Centro, CDMX",
-      telefono: "+52 55 1234 5678",
-      usuarios: 8,
-      status: "activa",
-      gerente: "María González",
-    },
-    {
-      id: 2,
-      nombre: "Sucursal Norte",
-      direccion: "Blvd. Norte 456, Satélite, Edo. Méx.",
-      telefono: "+52 55 8765 4321",
-      usuarios: 12,
-      status: "activa",
-      gerente: "Carlos Ruiz",
-    },
-    {
-      id: 3,
-      nombre: "Sucursal Sur",
-      direccion: "Av. Sur 789, Coyoacán, CDMX",
-      telefono: "+52 55 5555 0000",
-      usuarios: 6,
-      status: "inactiva",
-      gerente: "Ana López",
-    },
-    {
-      id: 4,
-      nombre: "Sucursal Oeste",
-      direccion: "Calle Oeste 321, Santa Fe, CDMX",
-      telefono: "+52 55 9999 1111",
-      usuarios: 10,
-      status: "activa",
-      gerente: "Pedro Martín",
-    },
-  ])
-
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  
   const [showSucursalModal, setShowSucursalModal] = useState(false)
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedSucursal, setSelectedSucursal] = useState<Sucursal | null>(null)
   const [sucursalToDelete, setSucursalToDelete] = useState<Sucursal | null>(null)
+  const [verificationResult, setVerificationResult] = useState<any>(null)
 
-  const gerentes = ["María González", "Carlos Ruiz", "Ana López", "Pedro Martín", "Laura Sánchez", "Diego Torres"]
+  // Cargar sucursales al montar el componente
+  useEffect(() => {
+    if (user?.restaurante_id) {
+      loadSucursales()
+    }
+  }, [user])
+
+  const loadSucursales = async () => {
+    try {
+      setIsLoading(true)
+      setError("")
+      const data = await sucursalesApi.getSucursales(user!.restaurante_id)
+      setSucursales(data)
+    } catch (error) {
+      console.error('Error cargando sucursales:', error)
+      setError('Error cargando sucursales')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleAddSucursal = () => {
     setSelectedSucursal(null)
@@ -83,39 +63,88 @@ export default function SucursalesPage() {
     setShowDeleteModal(true)
   }
 
-  const handleSaveSucursal = (sucursalData: Omit<Sucursal, "id" | "usuarios">) => {
-    if (selectedSucursal) {
-      // Edit existing sucursal
-      setSucursales(sucursales.map((s) => (s.id === selectedSucursal.id ? { ...s, ...sucursalData } : s)))
-    } else {
-      // Add new sucursal
-      const newSucursal: Sucursal = {
-        ...sucursalData,
-        id: Math.max(...sucursales.map((s) => s.id)) + 1,
-        usuarios: 0,
+  const handleSaveSucursal = async (sucursalData: SucursalRegistro) => {
+    try {
+      if (selectedSucursal) {
+        // Actualizar sucursal existente
+        await sucursalesApi.updateSucursal(selectedSucursal.sucursal_id, sucursalData)
+        setShowSucursalModal(false)
+        loadSucursales() // Recargar lista
+      } else {
+        // Registrar nueva sucursal
+        const result = await sucursalesApi.registerSucursal(sucursalData)
+        setShowSucursalModal(false)
+        
+        // Mostrar modal de verificación
+        setVerificationResult({
+          sucursal: result.sucursal,
+          message: result.message
+        })
+        setShowVerificationModal(true)
+        
+        loadSucursales() // Recargar lista
       }
-      setSucursales([...sucursales, newSucursal])
+    } catch (error) {
+      console.error('Error guardando sucursal:', error)
+      setError(error instanceof Error ? error.message : 'Error guardando sucursal')
     }
   }
 
-  const handleConfirmDelete = () => {
-    if (sucursalToDelete) {
-      setSucursales(sucursales.filter((s) => s.id !== sucursalToDelete.id))
+  const handleVerifySucursal = async (verificationCode: string) => {
+    try {
+      if (!verificationResult?.sucursal) return
+      
+      const result = await sucursalesApi.verifySucursal({
+        sucursal_id: verificationResult.sucursal.sucursal_id,
+        verification_code: verificationCode
+      })
+      
+      setShowVerificationModal(false)
+      setVerificationResult(null)
+      
+      // Mostrar resultado exitoso
+      alert(`¡Sucursal verificada exitosamente!\n\nUsuario creado:\nEmail: ${result.usuario.email}\nContraseña temporal: ${result.tempPassword}\n\nEl usuario debe cambiar su contraseña en el primer login.`)
+      
+      loadSucursales() // Recargar lista
+    } catch (error) {
+      console.error('Error verificando sucursal:', error)
+      setError(error instanceof Error ? error.message : 'Error verificando sucursal')
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    try {
+      if (!sucursalToDelete) return
+      
+      await sucursalesApi.deleteSucursal(sucursalToDelete.sucursal_id)
+      setShowDeleteModal(false)
       setSucursalToDelete(null)
+      loadSucursales() // Recargar lista
+    } catch (error) {
+      console.error('Error eliminando sucursal:', error)
+      setError(error instanceof Error ? error.message : 'Error eliminando sucursal')
     }
   }
 
-  const filteredSucursales = sucursales.filter(
-    (sucursal) =>
-      sucursal.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sucursal.direccion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sucursal.gerente.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredSucursales = sucursales.filter((sucursal) => {
+    const searchLower = searchTerm.toLowerCase()
+    return (
+      sucursal.nombre.toLowerCase().includes(searchLower) ||
+      sucursal.direccion.toLowerCase().includes(searchLower) ||
+      sucursal.email.toLowerCase().includes(searchLower) ||
+      sucursal.telefono.includes(searchTerm)
+    )
+  })
 
-  const getStatusColor = (status: string) => {
-    return status === "activa"
-      ? "bg-green-500/10 text-green-700 border-green-500/20"
-      : "bg-red-500/10 text-red-700 border-red-500/20"
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>Cargando...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -137,17 +166,32 @@ export default function SucursalesPage() {
                 <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                   Gestión de Sucursales
                 </h1>
-                <p className="text-xs text-muted-foreground">Administra todas tus ubicaciones</p>
+                <p className="text-xs text-muted-foreground">Administra las sucursales de tu restaurante</p>
               </div>
             </div>
+            <Button
+              onClick={handleAddSucursal}
+              className="bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-primary-foreground"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva Sucursal
+            </Button>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <span className="text-red-700">{error}</span>
+          </div>
+        )}
+
+        {/* Search and Filters */}
+        <div className="mb-6">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
               placeholder="Buscar sucursales..."
@@ -156,144 +200,130 @@ export default function SucursalesPage() {
               className="pl-10 glass"
             />
           </div>
-          <Button
-            onClick={handleAddSucursal}
-            className="bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transition-all duration-300 transform hover:scale-[1.02] cursor-pointer"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Añadir Sucursal
-          </Button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="glass hover:glass-strong transition-all duration-300 transform hover:scale-[1.02] cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Sucursales</CardTitle>
-              <Building className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{sucursales.length}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass hover:glass-strong transition-all duration-300 transform hover:scale-[1.02] cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Activas</CardTitle>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{sucursales.filter((s) => s.status === "activa").length}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass hover:glass-strong transition-all duration-300 transform hover:scale-[1.02] cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{sucursales.reduce((total, s) => total + s.usuarios, 0)}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass hover:glass-strong transition-all duration-300 transform hover:scale-[1.02] cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Promedio Usuarios</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {Math.round(sucursales.reduce((total, s) => total + s.usuarios, 0) / sucursales.length)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sucursales Table */}
-        <Card className="glass-strong">
-          <CardHeader>
-            <CardTitle>Lista de Sucursales</CardTitle>
-            <CardDescription>Gestiona y administra todas las sucursales de tu restaurante</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {filteredSucursales.map((sucursal) => (
-                <div
-                  key={sucursal.id}
-                  className="flex flex-col lg:flex-row lg:items-center justify-between p-6 glass rounded-lg hover:glass-strong transition-all duration-300 space-y-4 lg:space-y-0"
-                >
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-lg flex items-center justify-center">
-                        <Building className="w-6 h-6 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{sucursal.nombre}</h3>
-                        <p className="text-sm text-muted-foreground">Gerente: {sucursal.gerente}</p>
-                      </div>
-                      <Badge className={`${getStatusColor(sucursal.status)} border ml-auto lg:ml-0`}>
-                        {sucursal.status === "activa" ? "Activa" : "Inactiva"}
-                      </Badge>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                        <MapPin className="w-4 h-4" />
-                        <span>{sucursal.direccion}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                        <Phone className="w-4 h-4" />
-                        <span>{sucursal.telefono}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                        <Users className="w-4 h-4" />
-                        <span>{sucursal.usuarios} usuarios asignados</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2 lg:ml-6">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditSucursal(sucursal)}
-                      className="glass hover:glass-strong bg-transparent cursor-pointer"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteSucursal(sucursal)}
-                      className="glass hover:glass-strong text-destructive hover:text-destructive bg-transparent cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {filteredSucursales.length === 0 && (
-              <div className="text-center py-12">
-                <Building className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-muted-foreground mb-2">No se encontraron sucursales</h3>
-                <p className="text-sm text-muted-foreground">
-                  {searchTerm ? "Intenta con otros términos de búsqueda" : "Añade tu primera sucursal para comenzar"}
-                </p>
-              </div>
+        {/* Sucursales Grid */}
+        {isLoading ? (
+          <div className="text-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Cargando sucursales...</p>
+          </div>
+        ) : filteredSucursales.length === 0 ? (
+          <div className="text-center py-12">
+            <Building className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No hay sucursales</h3>
+            <p className="text-muted-foreground mb-4">
+              {searchTerm ? 'No se encontraron sucursales con ese criterio de búsqueda.' : 'Comienza agregando tu primera sucursal.'}
+            </p>
+            {!searchTerm && (
+              <Button onClick={handleAddSucursal} className="bg-gradient-to-r from-primary to-secondary">
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Sucursal
+              </Button>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSucursales.map((sucursal) => (
+              <Card key={sucursal.sucursal_id} className="glass hover:glass-strong transition-all duration-300 transform hover:scale-[1.02] cursor-pointer">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                        {sucursal.nombre}
+                        {sucursal.is_verified ? (
+                          <CheckCircle className="w-4 h-4 text-green-600" title="Verificada" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-yellow-600" title="Pendiente de verificación" />
+                        )}
+                      </CardTitle>
+                      <CardDescription className="text-sm">
+                        {sucursal.is_active ? (
+                          <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
+                            Activa
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-red-100 text-red-700 border-red-200">
+                            Inactiva
+                          </Badge>
+                        )}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEditSucursal(sucursal)
+                        }}
+                        className="text-primary hover:text-primary/80"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteSucursal(sucursal)
+                        }}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="w-4 h-4" />
+                    <span className="truncate">{sucursal.direccion}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="w-4 h-4" />
+                    <span>{sucursal.telefono}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Mail className="w-4 h-4" />
+                    <span className="truncate">{sucursal.email}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Users className="w-4 h-4" />
+                    <span>{sucursal.usuarios_count} usuarios</span>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    Creada: {new Date(sucursal.created_at).toLocaleDateString()}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* Modals */}
       <SucursalFormModal
         isOpen={showSucursalModal}
         onClose={() => setShowSucursalModal(false)}
         onSave={handleSaveSucursal}
         sucursal={selectedSucursal}
-        gerentes={gerentes}
+      />
+
+      <SucursalVerificationModal
+        isOpen={showVerificationModal}
+        onClose={() => {
+          setShowVerificationModal(false)
+          setVerificationResult(null)
+        }}
+        onVerify={handleVerifySucursal}
+        sucursal={verificationResult?.sucursal}
+        message={verificationResult?.message}
       />
 
       <DeleteConfirmationModal
@@ -301,8 +331,7 @@ export default function SucursalesPage() {
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleConfirmDelete}
         title="Eliminar Sucursal"
-        description="Estás a punto de eliminar la sucursal"
-        itemName={sucursalToDelete?.nombre || ""}
+        message={`¿Estás seguro de que quieres eliminar la sucursal "${sucursalToDelete?.nombre}"? Esta acción no se puede deshacer.`}
       />
     </div>
   )
