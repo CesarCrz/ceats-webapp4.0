@@ -21,6 +21,8 @@ const restaurantesRoutes = require('./routes/restaurantes');
 const sucursalesRoutes = require('./routes/sucursales');
 const usuariosRoutes = require('./routes/usuarios');
 const authRoutes = require('./routes/auth');
+const whatsappRoutes = require('./routes/whatsapp');
+const webhookRoutes = require('./routes/webhook');
 
 // Rutas relativas al backend/src
 const PEDIDOS_FILE = path.join(__dirname, 'pedidos.json');
@@ -72,6 +74,8 @@ app.use('/api/restaurantes', restaurantesRoutes);
 app.use('/api/sucursales', sucursalesRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/webhook', webhookRoutes);
 
 // --  Endpoint para el inicio de sesión
 

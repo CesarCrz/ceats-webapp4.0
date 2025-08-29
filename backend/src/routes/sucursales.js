@@ -25,13 +25,19 @@ router.get('/:restaurante_id', verifyToken, requireAdmin, async (req, res) => {
     const result = await pool.query(
       `SELECT 
         sucursal_id, 
-        nombre, 
+        nombre_sucursal, 
         direccion, 
-        telefono, 
-        email,
+        telefono_contacto, 
+        email_contacto_sucursal,
+        ciudad,
+        estado,
+        codigo_postal,
+        latitud,
+        longitud,
         is_verified,
         is_active,
         created_at,
+        updated_at,
         (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.sucursal_id) as usuarios_count
        FROM sucursales s 
        WHERE restaurante_id = $1 
@@ -59,7 +65,7 @@ router.post('/register', verifyToken, requireAdmin, async (req, res) => {
 
     // Verificar que el email no esté ya registrado
     const existingSucursal = await pool.query(
-      'SELECT sucursal_id FROM sucursales WHERE email = $1',
+      'SELECT sucursal_id FROM sucursales WHERE email_contacto_sucursal = $1',
       [email]
     );
 
@@ -76,16 +82,20 @@ router.post('/register', verifyToken, requireAdmin, async (req, res) => {
       `INSERT INTO sucursales (
         sucursal_id, 
         restaurante_id, 
-        nombre, 
+        nombre_sucursal, 
         direccion, 
-        telefono, 
-        email, 
+        telefono_contacto, 
+        email_contacto_sucursal, 
+        ciudad,
+        estado,
+        codigo_postal,
         verification_code, 
         verification_code_expires_at,
         is_verified,
-        is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
-      RETURNING sucursal_id, nombre, email`,
+        is_active,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+      RETURNING sucursal_id, nombre_sucursal, email_contacto_sucursal`,
       [
         uuidv4(),
         restaurante_id,
@@ -93,10 +103,14 @@ router.post('/register', verifyToken, requireAdmin, async (req, res) => {
         direccion,
         telefono,
         email,
+        req.body.ciudad || null,
+        req.body.estado || null,
+        req.body.codigo_postal || null,
         verificationCode,
         expiresAt,
         false,
-        true
+        true,
+        new Date()
       ]
     );
 
@@ -120,8 +134,8 @@ router.post('/register', verifyToken, requireAdmin, async (req, res) => {
       message: 'Sucursal registrada exitosamente. Se ha enviado un código de verificación al email proporcionado.',
       sucursal: {
         sucursal_id: sucursal.sucursal_id,
-        nombre: sucursal.nombre,
-        email: sucursal.email
+        nombre_sucursal: sucursal.nombre_sucursal,
+        email_contacto_sucursal: sucursal.email_contacto_sucursal
       }
     });
 
@@ -145,8 +159,8 @@ router.post('/verify', verifyToken, requireAdmin, async (req, res) => {
     const sucursalResult = await pool.query(
       `SELECT 
         sucursal_id, 
-        nombre, 
-        email, 
+        nombre_sucursal, 
+        email_contacto_sucursal, 
         verification_code, 
         verification_code_expires_at,
         is_verified
@@ -201,13 +215,13 @@ router.post('/verify', verifyToken, requireAdmin, async (req, res) => {
       RETURNING usuario_id, email, nombre, apellidos`,
       [
         uuidv4(),
-        sucursal.email,
+        sucursal.email_contacto_sucursal,
         hashedTempPassword,
         'empleado',
         restaurante_id,
         sucursal_id,
         'Usuario',
-        sucursal.nombre,
+        sucursal.nombre_sucursal,
         true,
         true,
         hashedTempPassword,
@@ -222,8 +236,8 @@ router.post('/verify', verifyToken, requireAdmin, async (req, res) => {
       message: 'Sucursal verificada exitosamente. Se ha creado un usuario con acceso temporal.',
       sucursal: {
         sucursal_id: sucursal.sucursal_id,
-        nombre: sucursal.nombre,
-        email: sucursal.email
+        nombre_sucursal: sucursal.nombre_sucursal,
+        email_contacto_sucursal: sucursal.email_contacto_sucursal
       },
       usuario: {
         usuario_id: usuario.usuario_id,
@@ -258,7 +272,7 @@ router.post('/login', async (req, res) => {
         u.role,
         u.restaurante_id,
         u.sucursal_id,
-        u.nombre,
+        u.nombre_sucursal,
         u.apellidos,
         u.is_email_verified,
         u.is_first_login,
@@ -304,7 +318,7 @@ router.post('/login', async (req, res) => {
         user: {
           usuario_id: user.usuario_id,
           email: user.email,
-          nombre: user.nombre,
+          nombre: user.nombre_sucursal,
           apellidos: user.apellidos,
           role: user.role,
           restaurante_id: user.restaurante_id,
@@ -428,9 +442,10 @@ router.put('/:sucursal_id', verifyToken, requireAdmin, async (req, res) => {
     // Actualizar sucursal
     await pool.query(
       `UPDATE sucursales 
-       SET nombre = $1, direccion = $2, telefono = $3, email = $4, is_active = $5, updated_at = NOW()
-       WHERE sucursal_id = $6`,
-      [nombre, direccion, telefono, email, is_active, sucursal_id]
+       SET nombre_sucursal = $1, direccion = $2, telefono_contacto = $3, email_contacto_sucursal = $4, 
+           ciudad = $5, estado = $6, codigo_postal = $7, is_active = $8, updated_at = NOW()
+       WHERE sucursal_id = $9`,
+      [nombre, direccion, telefono, email, req.body.ciudad || null, req.body.estado || null, req.body.codigo_postal || null, is_active, sucursal_id]
     );
 
     res.json({
