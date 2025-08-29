@@ -24,15 +24,21 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal }: Sucursa
     direccion: "",
     telefono: "",
     email: "",
+    ciudad: "",
+    estado: "",
+    codigo_postal: "",
   })
 
   useEffect(() => {
     if (sucursal) {
       setFormData({
-        nombre: sucursal.nombre || "",
+        nombre: sucursal.nombre_sucursal || "",
         direccion: sucursal.direccion || "",
-        telefono: sucursal.telefono || "",
-        email: sucursal.email || "",
+        telefono: sucursal.telefono_contacto || "",
+        email: sucursal.email_contacto_sucursal || "",
+        ciudad: sucursal.ciudad || "",
+        estado: sucursal.estado || "",
+        codigo_postal: sucursal.codigo_postal || "",
       })
     } else {
       setFormData({
@@ -40,6 +46,9 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal }: Sucursa
         direccion: "",
         telefono: "",
         email: "",
+        ciudad: "",
+        estado: "",
+        codigo_postal: "",
       })
     }
   }, [sucursal, isOpen])
@@ -57,6 +66,9 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal }: Sucursa
       direccion: "",
       telefono: "",
       email: "",
+      ciudad: "",
+      estado: "",
+      codigo_postal: "",
     })
     onClose()
   }
@@ -147,6 +159,41 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursal }: Sucursa
             <p className="text-xs text-muted-foreground">
               Se enviará un código de verificación a este email para activar la sucursal
             </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="ciudad">Ciudad</Label>
+              <Input
+                id="ciudad"
+                value={formData.ciudad}
+                onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
+                placeholder="Ciudad de México"
+                className="glass focus:glass-strong"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="estado">Estado</Label>
+              <Input
+                id="estado"
+                value={formData.estado}
+                onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                placeholder="CDMX"
+                className="glass focus:glass-strong"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="codigo_postal">Código Postal</Label>
+            <Input
+              id="codigo_postal"
+              value={formData.codigo_postal}
+              onChange={(e) => setFormData({ ...formData, codigo_postal: e.target.value })}
+              placeholder="06000"
+              className="glass focus:glass-strong"
+            />
           </div>
 
           <div className="flex space-x-3 pt-4">

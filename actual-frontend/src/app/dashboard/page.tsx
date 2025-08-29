@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { OrderCard } from "@/components/order-card"
 import { OrderDetailModal } from "@/components/order-detail-modal"
 import { CancelOrderModal } from "@/components/cancel-order-modal"
+import { WhatsAppIntegrationModal } from "@/components/whatsapp-integration-modal"
 import {
   ChefHat,
   Clock,
@@ -93,6 +94,10 @@ export default function DashboardPage() {
 
   const handleNavigateToAddSucursal = () => {
     router.push("/sucursales")
+  }
+
+  const handleWhatsAppIntegration = () => {
+    // El modal se maneja internamente
   }
 
   const [preparingOrders, setPreparingOrders] = useState([
@@ -224,14 +229,18 @@ export default function DashboardPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="glass-strong border-white/20" align="end">
-                  <DropdownMenuItem onClick={handleNavigateToAddUser} className="cursor-pointer">
-                    <Users className="w-4 h-4 mr-2" />
-                    Agregar Usuario
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleNavigateToAddSucursal} className="cursor-pointer">
-                    <Building className="w-4 h-4 mr-2" />
-                    Agregar Sucursal
-                  </DropdownMenuItem>
+                  {user?.role === 'admin' && (
+                    <>
+                      <DropdownMenuItem onClick={handleNavigateToAddUser} className="cursor-pointer">
+                        <Users className="w-4 h-4 mr-2" />
+                        Agregar Usuario
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleNavigateToAddSucursal} className="cursor-pointer">
+                        <Building className="w-4 h-4 mr-2" />
+                        Agregar Sucursal
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -489,6 +498,8 @@ export default function DashboardPage() {
         onConfirm={handleConfirmCancel}
         orderId={orderToCancel}
       />
+
+      <WhatsAppIntegrationModal />
     </div>
   )
 }

@@ -129,10 +129,10 @@ export default function SucursalesPage() {
   const filteredSucursales = sucursales.filter((sucursal) => {
     const searchLower = searchTerm.toLowerCase()
     return (
-      sucursal.nombre.toLowerCase().includes(searchLower) ||
-      sucursal.direccion.toLowerCase().includes(searchLower) ||
-      sucursal.email.toLowerCase().includes(searchLower) ||
-      sucursal.telefono.includes(searchTerm)
+      sucursal.nombre_sucursal?.toLowerCase().includes(searchLower) ||
+      sucursal.direccion?.toLowerCase().includes(searchLower) ||
+      sucursal.email_contacto_sucursal?.toLowerCase().includes(searchLower) ||
+      sucursal.telefono_contacto?.includes(searchTerm)
     )
   })
 
@@ -230,7 +230,7 @@ export default function SucursalesPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                        {sucursal.nombre}
+                        {sucursal.nombre_sucursal}
                         {sucursal.is_verified ? (
                           <CheckCircle className="w-4 h-4 text-green-600" title="Verificada" />
                         ) : (
@@ -284,12 +284,12 @@ export default function SucursalesPage() {
                   
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Phone className="w-4 h-4" />
-                    <span>{sucursal.telefono}</span>
+                    <span>{sucursal.telefono_contacto}</span>
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Mail className="w-4 h-4" />
-                    <span className="truncate">{sucursal.email}</span>
+                    <span className="truncate">{sucursal.email_contacto_sucursal}</span>
                   </div>
                   
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

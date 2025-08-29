@@ -32,13 +32,19 @@ export interface Restaurante {
 export interface Sucursal {
   sucursal_id: string;
   restaurante_id: string;
-  nombre: string;
+  nombre_sucursal: string;
   direccion: string;
-  telefono: string;
-  email: string;
+  telefono_contacto: string;
+  email_contacto_sucursal: string;
+  ciudad: string | null;
+  estado: string | null;
+  codigo_postal: string | null;
+  latitud: number | null;
+  longitud: number | null;
   is_verified: boolean;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
   usuarios_count: number;
 }
 
@@ -47,6 +53,9 @@ export interface SucursalRegistro {
   direccion: string;
   telefono: string;
   email: string;
+  ciudad?: string;
+  estado?: string;
+  codigo_postal?: string;
 }
 
 export interface SucursalVerificacion {
@@ -103,7 +112,7 @@ class ApiClient {
     this.token = null;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -243,6 +252,52 @@ class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // Métodos para WhatsApp
+  async getWhatsAppIntegrations() {
+    return this.request('/api/whatsapp/integrations');
+  }
+
+  async createWhatsAppIntegration(data: any) {
+    return this.request('/api/whatsapp/integrations', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async updateWhatsAppIntegration(integrationId: string, data: any) {
+    return this.request(`/api/whatsapp/integrations/${integrationId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async deleteWhatsAppIntegration(integrationId: string) {
+    return this.request(`/api/whatsapp/integrations/${integrationId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async connectBaileys(sucursalId: string) {
+    return this.request('/api/whatsapp/connect/baileys', {
+      method: 'POST',
+      body: JSON.stringify({ sucursalId })
+    });
+  }
+
+  async connectWhatsAppBusiness(sucursalId: string) {
+    return this.request('/api/whatsapp/connect/whatsapp-business', {
+      method: 'POST',
+      body: JSON.stringify({ sucursalId })
+    });
+  }
+
+  async sendWhatsAppMessage(data: any) {
+    return this.request('/api/whatsapp/send-message', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
@@ -251,134 +306,53 @@ export const apiClient = new ApiClient(API_BASE_URL);
 export const sucursalesApi = {
   // Obtener sucursales de un restaurante
   async getSucursales(restauranteId: string): Promise<Sucursal[]> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/${restauranteId}`, {
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error obteniendo sucursales: ${response.status}`);
-    }
-
-    return response.json();
+    return apiClient.request(`/api/sucursales/${restauranteId}`);
   },
 
   // Registrar nueva sucursal
   async registerSucursal(sucursalData: SucursalRegistro): Promise<{ success: boolean; message: string; sucursal: any }> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/register`, {
+    return apiClient.request('/api/sucursales/register', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(sucursalData),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Error registrando sucursal');
-    }
-
-    return data;
   },
 
   // Verificar código de sucursal
   async verifySucursal(verificacionData: SucursalVerificacion): Promise<{ success: boolean; message: string; sucursal: any; usuario: any; tempPassword: string }> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/verify`, {
+    return apiClient.request('/api/sucursales/verify', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(verificacionData),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Error verificando sucursal');
-    }
-
-    return data;
   },
 
   // Login de usuario de sucursal
   async loginSucursal(credentials: SucursalLoginCredentials): Promise<{ success: boolean; message: string; token?: string; user?: any; requiresPasswordChange?: boolean }> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/login`, {
+    return apiClient.request('/api/sucursales/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(credentials),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Error en login de sucursal');
-    }
-
-    return data;
   },
 
   // Cambiar contraseña de usuario de sucursal
   async changePassword(passwordData: ChangePasswordData): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/change-password`, {
+    return apiClient.request('/api/sucursales/change-password', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(passwordData),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Error cambiando contraseña');
-    }
-
-    return data;
   },
 
   // Actualizar sucursal
   async updateSucursal(sucursalId: string, sucursalData: Partial<Sucursal>): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/${sucursalId}`, {
+    return apiClient.request(`/api/sucursales/${sucursalId}`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(sucursalData),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Error actualizando sucursal');
-    }
-
-    return data;
   },
 
   // Eliminar sucursal
   async deleteSucursal(sucursalId: string): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/api/sucursales/${sucursalId}`, {
+    return apiClient.request(`/api/sucursales/${sucursalId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Content-Type': 'application/json',
-      },
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Error eliminando sucursal');
-    }
-
-    return data;
   },
 };
